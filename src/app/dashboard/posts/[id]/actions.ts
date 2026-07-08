@@ -47,9 +47,8 @@ export async function updatePostAction(postId: string, _prev: UpdatePostState, f
     scheduledAt: scheduledAt.toISOString(),
   });
   if (!rescheduleResult.ok) {
-    return {
-      error: `Bijwerken bij Meta mislukt voor: ${rescheduleResult.failedPlatforms.join(", ")}. De post is niet gewijzigd.`,
-    };
+    const details = rescheduleResult.errors.map((e) => `${e.platform}: ${e.message}`).join(" — ");
+    return { error: `Bijwerken bij Meta mislukt. De post is niet gewijzigd. (${details})` };
   }
 
   const { error: postError } = await supabase
