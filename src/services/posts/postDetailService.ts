@@ -20,6 +20,8 @@ export interface PostDetailData {
   agencyLogo?: string;
   /** True when this post has a template but rendering fell back to an unbranded source photo for at least one slide — see browserRenderService. */
   hasRenderFallback: boolean;
+  /** Ordered by sort_order (same order as slideIndex in PhonePreview). Null entries mean that slide hasn't been rendered yet (still draft). */
+  renderedImageUrls: (string | null)[];
 }
 
 /**
@@ -93,5 +95,6 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     agencyName: agency?.name ?? "",
     agencyLogo: agency?.logo_url ?? undefined,
     hasRenderFallback,
+    renderedImageUrls: (slides ?? []).map((slide) => slide.rendered_image_url),
   };
 }

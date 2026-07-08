@@ -2,6 +2,7 @@
 
 import { Component as ReactComponent, useMemo, type ReactNode } from "react";
 import { compileTemplateSource } from "@/lib/dynamic-template";
+import { RenderImage } from "@/components/render/RenderImage";
 import type { TemplateComponentProps } from "./types";
 
 function TemplateErrorDisplay({ message }: { message: string }) {
@@ -31,16 +32,28 @@ class TemplateErrorBoundary extends ReactComponent<{ children: ReactNode }, { er
  * Compiles `source` (admin-authored TSX, see src/lib/dynamic-template.ts)
  * into a live component and renders it. Used both for the admin's own live
  * preview while authoring a template, and for the agency's post-creation
- * preview — the same compiled output either way.
+ * preview — the same compiled output either way. `useRawImage` is only set
+ * by the internal render-slide page (plain `<img>` instead of next/image —
+ * see RenderImage.tsx); everywhere else uses the default (next/image).
+ *
+ * `RenderImage` is resolved here, inside this already-client component,
+ * rather than accepted as a component-reference prop — a Server Component
+ * page (the render-slide page) can't pass a function value as a prop across
+ * the server/client boundary (React rejects it at runtime), so the caller
+ * only ever passes the serializable `useRawImage` boolean.
  */
-export function DynamicTemplateRenderer({ source, ...props }: TemplateComponentProps & { source: string }) {
+export function DynamicTemplateRenderer({
+  source,
+  useRawImage,
+  ...props
+}: TemplateComponentProps & { source: string; useRawImage?: boolean }) {
   const result = useMemo(() => {
     try {
-      return { component: compileTemplateSource(source), error: null as string | null };
+      return { component: compileTemplateSource(source, useRawImage ? RenderImage : undefined), error: null as string | null };
     } catch (error) {
       return { component: null, error: (error as Error).message };
     }
-  }, [source]);
+  }, [source, useRawImage]);
 
   if (!result.component) {
     return <TemplateErrorDisplay message={result.error ?? "Onbekende fout."} />;

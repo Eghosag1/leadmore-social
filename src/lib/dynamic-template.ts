@@ -15,7 +15,15 @@ import { transform } from "sucrase";
 import type { ComponentType } from "react";
 import type { TemplateComponentProps } from "@/components/templates/types";
 
-export function compileTemplateSource(source: string): ComponentType<TemplateComponentProps> {
+/**
+ * `imageComponent` defaults to next/image but can be overridden — the
+ * internal render-slide page passes RenderImage (a plain `<img>`) instead,
+ * see src/components/render/RenderImage.tsx for why.
+ */
+export function compileTemplateSource(
+  source: string,
+  imageComponent: unknown = Image,
+): ComponentType<TemplateComponentProps> {
   if (!source.trim()) {
     throw new Error("Deze template heeft nog geen broncode.");
   }
@@ -31,7 +39,7 @@ export function compileTemplateSource(source: string): ComponentType<TemplateCom
   try {
     // eslint-disable-next-line no-new-func -- intentional: this *is* the runtime template compiler.
     const run = new Function("exports", "React", "Image", compiled);
-    run(moduleExports, React, Image);
+    run(moduleExports, React, imageComponent);
   } catch (error) {
     throw new Error(`Fout bij het uitvoeren van de template: ${(error as Error).message}`);
   }

@@ -41,6 +41,7 @@ export default async function PostDetailPage({
         agencyName={data.agencyName}
         agencyLogo={data.agencyLogo}
         hasRenderFallback={data.hasRenderFallback}
+        renderedImageUrls={data.renderedImageUrls}
       />
     </div>
   );

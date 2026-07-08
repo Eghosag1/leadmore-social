@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PhonePreview } from "@/components/dashboard/PhonePreview";
 import { CancelPostButton } from "@/components/dashboard/CancelPostButton";
+import { DownloadImageButton } from "@/components/dashboard/DownloadImageButton";
 import { FieldBindingControl } from "@/components/dashboard/FieldBindingControl";
 import { PostStatusBadge } from "@/components/shared/StatusBadge";
 import { MANUAL_SOURCE, resolvePropertyField, type FieldSourceValue } from "@/lib/field-binding";
@@ -33,6 +34,7 @@ export function PostDetailClient({
   agencyName,
   agencyLogo,
   hasRenderFallback,
+  renderedImageUrls,
 }: {
   postId: string;
   property: PropertyRow;
@@ -47,6 +49,7 @@ export function PostDetailClient({
   agencyName: string;
   agencyLogo?: string;
   hasRenderFallback: boolean;
+  renderedImageUrls: (string | null)[];
 }) {
   const [captionSource, setCaptionSource] = useState<FieldSourceValue>(MANUAL_SOURCE);
   const [caption, setCaption] = useState(initialCaption);
@@ -66,6 +69,7 @@ export function PostDetailClient({
 
   const canEdit = status === "draft" || status === "ready" || status === "scheduled";
   const canCancel = status !== "cancelled" && status !== "published";
+  const currentSlideImageUrl = renderedImageUrls[slideIndex] ?? null;
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -163,6 +167,14 @@ export function PostDetailClient({
           slideIndex={slideIndex}
           onSlideIndexChange={setSlideIndex}
         />
+        {currentSlideImageUrl && (
+          <div className="mt-4 flex justify-center">
+            <DownloadImageButton
+              imageUrl={currentSlideImageUrl}
+              fileName={`${propertyTitle}-slide-${slideIndex + 1}.png`}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
