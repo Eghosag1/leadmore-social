@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createPost, schedulePost } from "@/services/posts/postSchedulerService";
+import { parseScheduledAt } from "@/lib/scheduled-time";
 import type { Platform, PostType } from "@/types/enums";
 
 export interface CreatePostState {
@@ -37,7 +38,7 @@ export async function createAndSchedulePostAction(
     return { error: "Kies een datum en uur om de post in te plannen." };
   }
 
-  const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}:00`);
+  const scheduledAt = parseScheduledAt(scheduledDate, scheduledTime);
   if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() < Date.now()) {
     return { error: "Kies een datum en uur in de toekomst." };
   }

@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { cancelPost } from "@/services/posts/postSchedulerService";
 import { getPostDetailData, type PostDetailData } from "@/services/posts/postDetailService";
+import { parseScheduledAt } from "@/lib/scheduled-time";
 
 export interface UpdatePostState {
   error: string | null;
@@ -23,7 +24,7 @@ export async function updatePostAction(postId: string, _prev: UpdatePostState, f
   if (!caption) return { error: "Het bijschrift mag niet leeg zijn." };
   if (!scheduledDate || !scheduledTime) return { error: "Kies een datum en uur." };
 
-  const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}:00`);
+  const scheduledAt = parseScheduledAt(scheduledDate, scheduledTime);
   if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() < Date.now()) {
     return { error: "Kies een datum en uur in de toekomst." };
   }
