@@ -1,0 +1,109 @@
+import Link from "next/link";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { PostStatusBadge } from "@/components/shared/StatusBadge";
+import { PostCreatedToast } from "@/components/dashboard/PostCreatedToast";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { requireRole } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { formatDateTime } from "@/lib/format";
+import type { Platform, PostStatus } from "@/types/enums";
+
+// lucide-react no longer ships brand marks (trademark reasons), so platforms
+// are labelled with short text badges instead of logos.
+const PLATFORM_LABEL: Record<Platform, string> = { facebook: "FB", instagram: "IG" };
+
+// Mirrors PostDetailClient's canEdit — these statuses still allow editing caption/date.
+const EDITABLE_STATUSES: PostStatus[] = ["draft", "ready", "scheduled"];
+
+export default async function PostsPage({ searchParams }: { searchParams: Promise<{ created?: string }> }) {
+  const { created } = await searchParams;
+  const current = await requireRole(["agency_admin", "agency_user"]);
+  const agencyId = current.profile.agency_id!;
+  const supabase = await createClient();
+
+  const { data: posts } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("agency_id", agencyId)
+    .order("created_at", { ascending: false });
+
+  const postIds = (posts ?? []).map((p) => p.id);
+  const propertyIds = [...new Set((posts ?? []).map((p) => p.property_id))];
+
+  const [{ data: properties }, { data: jobs }] = await Promise.all([
+    propertyIds.length
+      ? supabase.from("properties").select("id, title").in("id", propertyIds)
+      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
+    postIds.length ? supabase.from("post_jobs").select("*").in("post_id", postIds) : Promise.resolve({ data: [] }),
+  ]);
+
+  const propertyTitleById = new Map((properties ?? []).map((p) => [p.id, p.title]));
+  const jobsByPost = new Map<string, typeof jobs>();
+  for (const job of jobs ?? []) {
+    jobsByPost.set(job.post_id, [...(jobsByPost.get(job.post_id) ?? []), job]);
+  }
+
+  return (
+    <div>
+      {created === "1" && <PostCreatedToast />}
+      <PageHeader title="Posts" description="Alle posts die u heeft aangemaakt, ingepland via Facebook en Instagram." />
+
+      {!posts || posts.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-neutral-200 py-16 text-center text-sm text-muted-foreground">
+          Nog geen posts aangemaakt.
+        </p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Pand</TableHead>
+              <TableHead>Bijschrift</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Platform</TableHead>
+              <TableHead>Ingepland op</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actie</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {posts.map((post) => {
+              const postJobs = jobsByPost.get(post.id) ?? [];
+              return (
+                <TableRow key={post.id}>
+                  <TableCell className="font-medium text-neutral-900">
+                    {propertyTitleById.get(post.property_id) ?? "Onbekend pand"}
+                  </TableCell>
+                  <TableCell className="max-w-64 truncate text-sm text-muted-foreground">{post.caption}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground capitalize">{post.post_type}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1.5">
+                      {postJobs.map((job) => (
+                        <span
+                          key={job.platform}
+                          title={job.error_message ?? undefined}
+                          className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-600"
+                        >
+                          {PLATFORM_LABEL[job.platform]}
+                        </span>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{formatDateTime(post.scheduled_at)}</TableCell>
+                  <TableCell>
+                    <PostStatusBadge status={post.status} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/posts/${post.id}`} />}>
+                      {EDITABLE_STATUSES.includes(post.status) ? "Bewerken" : "Bekijken"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  );
+}

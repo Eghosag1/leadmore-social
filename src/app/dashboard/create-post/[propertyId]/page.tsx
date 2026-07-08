@@ -1,0 +1,43 @@
+import { notFound } from "next/navigation";
+import { requireRole } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { listActiveAgencyTemplatesForCustomer } from "@/services/templates/templateService";
+import { CreatePostForm } from "@/components/dashboard/CreatePostForm";
+
+export default async function CreatePostPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ propertyId: string }>;
+  searchParams: Promise<{ returnTo?: string }>;
+}) {
+  const { propertyId } = await params;
+  const { returnTo } = await searchParams;
+  // Only ever forward a same-app path — never let an arbitrary query value become a redirect target.
+  const safeReturnTo = returnTo?.startsWith("/dashboard") ? returnTo : undefined;
+  const current = await requireRole(["agency_admin", "agency_user"]);
+  const agencyId = current.profile.agency_id!;
+  const supabase = await createClient();
+
+  const [{ data: property }, { data: images }, templates, { data: agency }, { data: connection }] = await Promise.all([
+    supabase.from("properties").select("*").eq("agency_id", agencyId).eq("id", propertyId).maybeSingle(),
+    supabase.from("property_images").select("*").eq("property_id", propertyId).order("sort_order"),
+    listActiveAgencyTemplatesForCustomer(agencyId),
+    supabase.from("agencies").select("name, logo_url").eq("id", agencyId).single(),
+    supabase.from("social_connections").select("status").eq("agency_id", agencyId).eq("provider", "meta").maybeSingle(),
+  ]);
+
+  if (!property) notFound();
+
+  return (
+    <CreatePostForm
+      property={property}
+      images={images ?? []}
+      templates={templates}
+      agencyName={agency?.name ?? ""}
+      agencyLogo={agency?.logo_url ?? undefined}
+      metaConnected={connection?.status === "connected"}
+      returnTo={safeReturnTo}
+    />
+  );
+}
