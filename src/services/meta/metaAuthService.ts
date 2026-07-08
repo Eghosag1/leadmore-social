@@ -48,6 +48,11 @@ export const metaAuthService = {
     url.searchParams.set("state", signState(agencyId));
     url.searchParams.set("scope", SCOPES);
     url.searchParams.set("response_type", "code");
+    // Forces Facebook to show the full consent + Page-picker dialog again
+    // every time, instead of silently reusing a previous (possibly
+    // page-less) grant for this app — important while debugging why a
+    // freshly-selected Page still doesn't show up via /me/accounts.
+    url.searchParams.set("auth_type", "rerequest");
     return url.toString();
   },
 
@@ -78,9 +83,18 @@ export const metaAuthService = {
       fb_exchange_token: shortLived.access_token,
     });
 
+    // Temporary debug logging while diagnosing why a selected Page doesn't
+    // surface here — remove once the flow is confirmed working end-to-end.
+    const permissions = await graphFetch<{ data: { permission: string; status: string }[] }>("/me/permissions", {
+      access_token: longLived.access_token,
+    });
+    console.log("[metaAuthService] granted permissions:", JSON.stringify(permissions.data));
+
     const pages = await graphFetch<{ data: { id: string; access_token: string }[] }>("/me/accounts", {
       access_token: longLived.access_token,
     });
+    console.log("[metaAuthService] /me/accounts response:", JSON.stringify(pages));
+
     const page = pages.data[0];
     if (!page) throw new Error("Dit Facebook-account beheert geen enkele Pagina.");
 
