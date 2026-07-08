@@ -224,6 +224,21 @@ vereist dit Business Verification of een correcte taak-toewijzing op Pagina-nive
 Business Manager. Relevant om vooraf te weten bij het onboarden van kantoren: hun Pagina kan in de praktijk
 onder een Business Portfolio vallen.
 
+### Tweede koppelmethode: Business Manager / System User (branch `feature/business-manager-connect`, nog niet op main)
+
+Voor Pagina's binnen een Business Portfolio, als alternatief voor de personal-OAuth-flow hierboven:
+`metaAuthService.connectViaBusinessManager(facebookPageId)` gebruikt Leadmore's eigen **System User**-token
+(`META_SYSTEM_USER_TOKEN`, aan te maken via Business Settings → System Users → Generate New Token) om rechtstreeks
+`GET /{page-id}?fields=access_token,instagram_business_account` aan te roepen — geen OAuth-redirect, geen
+per-kantoor consentscherm. **Vereist wel een handmatige, kantoor-kant stap die geen enkele API kan vervangen:** het
+kantoor moet hun Pagina eerst delen met Leadmore's Business Manager als partner (Business Settings → Pages →
+Assign Partner → Leadmore's Business ID invullen, of Leadmore vraagt toegang aan via de Pagina-ID). Pas daarna
+kan de admin in `BusinessManagerConnectForm` (`src/components/admin/BusinessManagerConnectForm.tsx`, op
+`/admin/agencies/[id]/settings` onder de gewone "Verbind met Facebook"-knop) het Facebook-pagina ID invullen via
+`connectAgencyViaBusinessManagerAction` (`src/app/admin/agencies/actions.ts`) — schrijft naar dezelfde
+`social_connections`-tabel, dus `facebookPublishingService` werkt ongewijzigd verder ongeacht welke van de twee
+methodes gebruikt werd.
+
 Tokens worden versleuteld opgeslagen (`src/lib/token-encryption.ts`, AES-256-GCM) — ook het handmatige token-veld
 in `MetaConnectionForm` gaat nu door `encryptToken()`; het veld toont nooit een opgeslagen token terug (leeg laten
 = huidig token behouden, zie `updateAgencyMetaConnectionAction`). `facebookPublishingService.schedule()` ontsleutelt
@@ -261,6 +276,9 @@ ervan afhangen zoals `postSchedulerService`) blijft ongewijzigd omdat alles acht
    `http://localhost:3000/api/meta/callback`, moet exact overeenkomen met wat in het Meta-dashboard geregistreerd
    staat), en `TOKEN_ENCRYPTION_KEY` (zelf te genereren met `openssl rand -hex 32`). Zonder deze vars werkt de rest
    van de app gewoon door.
+6. Optioneel, enkel nodig voor de Business Manager-koppelmethode (zie "Tweede koppelmethode" hierboven, branch
+   `feature/business-manager-connect`): `META_SYSTEM_USER_TOKEN`, aan te maken via Business Settings → System
+   Users → Generate New Token.
 
 **Demo-accounts na het seeden** (wachtwoord `Leadmore123!` voor iedereen, tenzij je `SEED_SUPER_ADMIN_EMAIL`/
 `SEED_SUPER_ADMIN_PASSWORD` in `.env.local` hebt gezet — dat overschrijft enkel het super_admin-account):

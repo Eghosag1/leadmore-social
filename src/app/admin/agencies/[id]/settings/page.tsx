@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { AgencyForm } from "@/components/admin/AgencyForm";
 import { MetaConnectionForm } from "@/components/admin/MetaConnectionForm";
+import { BusinessManagerConnectForm } from "@/components/admin/BusinessManagerConnectForm";
 import { CrmConnectionForm } from "@/components/admin/CrmConnectionForm";
 import { DeleteAgencyButton } from "@/components/admin/DeleteAgencyButton";
 import { requireRole } from "@/lib/auth";
@@ -16,6 +17,7 @@ import {
   updateAgencyMetaConnectionAction,
   updateAgencyCrmConnectionAction,
   startMetaConnectAction,
+  connectAgencyViaBusinessManagerAction,
 } from "../../actions";
 
 export default async function AgencySettingsPage({
@@ -44,6 +46,7 @@ export default async function AgencySettingsPage({
   const boundMetaUpdate = updateAgencyMetaConnectionAction.bind(null, agency.id);
   const boundCrmUpdate = updateAgencyCrmConnectionAction.bind(null, agency.id);
   const boundMetaConnect = startMetaConnectAction.bind(null, agency.id);
+  const boundBusinessManagerConnect = connectAgencyViaBusinessManagerAction.bind(null, agency.id);
 
   return (
     <div>
@@ -118,6 +121,7 @@ export default async function AgencySettingsPage({
                   Verbind met Facebook
                 </Button>
               </form>
+              <BusinessManagerConnectForm action={boundBusinessManagerConnect} />
               <MetaConnectionForm action={boundMetaUpdate} connection={metaConnection ?? null} />
             </CardContent>
           </Card>
