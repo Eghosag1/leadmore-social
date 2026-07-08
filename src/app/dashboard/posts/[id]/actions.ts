@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { cancelPost } from "@/services/posts/postSchedulerService";
+import { cancelPost, reschedulePost } from "@/services/posts/postSchedulerService";
 import { getPostDetailData, type PostDetailData } from "@/services/posts/postDetailService";
 import { parseScheduledAt } from "@/lib/scheduled-time";
 
@@ -35,6 +35,21 @@ export async function updatePostAction(postId: string, _prev: UpdatePostState, f
   if (!post) return { error: "Post niet gevonden." };
   if (!["draft", "ready", "scheduled"].includes(post.status)) {
     return { error: "Deze post kan niet meer bewerkt worden." };
+  }
+
+  // Push the new caption/time to Meta first — if a platform already has a
+  // scheduled post there, our own DB shouldn't claim success unless that
+  // actually got updated too.
+  const rescheduleResult = await reschedulePost({
+    postId,
+    agencyId,
+    caption,
+    scheduledAt: scheduledAt.toISOString(),
+  });
+  if (!rescheduleResult.ok) {
+    return {
+      error: `Bijwerken bij Meta mislukt voor: ${rescheduleResult.failedPlatforms.join(", ")}. De post is niet gewijzigd.`,
+    };
   }
 
   const { error: postError } = await supabase
