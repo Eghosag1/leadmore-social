@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { MetaPublishingService, MetaSchedulingRequest, MetaSchedulingResult } from "@/types/domain";
+import type { MetaPublishingService, MetaRescheduleRequest, MetaSchedulingRequest, MetaSchedulingResult } from "@/types/domain";
 
 /**
  * Stands in for the real Meta Graph API. facebookPublishingService and
@@ -38,5 +38,10 @@ export const mockMetaSchedulingService: MetaPublishingService = {
     await new Promise((resolve) => setTimeout(resolve, 150));
     const prefix = request.platform === "facebook" ? "mock_fb" : "mock_ig";
     return { ok: true, metaObjectId: `${prefix}_${crypto.randomUUID().slice(0, 8)}` };
+  },
+
+  async reschedule(request: MetaRescheduleRequest): Promise<MetaSchedulingResult> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return { ok: true, metaObjectId: request.metaObjectId };
   },
 };

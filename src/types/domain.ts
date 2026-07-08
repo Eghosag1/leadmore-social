@@ -101,8 +101,18 @@ export interface MetaSchedulingResult {
   errorMessage?: string;
 }
 
+export interface MetaRescheduleRequest {
+  agencyId: string;
+  platform: Platform;
+  /** post_jobs.meta_object_id from the original schedule() call — identifies which Meta-side post to update. */
+  metaObjectId: string;
+  caption: string;
+  scheduledAt: string;
+}
+
 export interface MetaPublishingService {
   schedule(request: MetaSchedulingRequest): Promise<MetaSchedulingResult>;
+  reschedule(request: MetaRescheduleRequest): Promise<MetaSchedulingResult>;
 }
 
 export interface PostStatusBadgeMeta {

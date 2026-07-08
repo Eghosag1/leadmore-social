@@ -41,15 +41,21 @@ export function propertyStatusLabel(status: PropertyStatus): string {
   return PROPERTY_STATUS_LABELS[status];
 }
 
+// Explicit timeZone matters here: these render inside Server Components,
+// which run on Vercel in UTC — without it, times would display in UTC
+// instead of Belgian local time (see src/lib/scheduled-time.ts for the
+// matching fix on the write side).
 const DATE_FORMATTER = new Intl.DateTimeFormat("nl-BE", {
   day: "numeric",
   month: "long",
   year: "numeric",
+  timeZone: "Europe/Brussels",
 });
 
 const TIME_FORMATTER = new Intl.DateTimeFormat("nl-BE", {
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: "Europe/Brussels",
 });
 
 export function formatDateTime(iso: string | null): string {

@@ -129,3 +129,53 @@ export async function cancelPost(postId: string): Promise<void> {
   await supabase.from("posts").update({ status: "cancelled" }).eq("id", postId);
   await supabase.from("post_jobs").delete().eq("post_id", postId);
 }
+
+export interface ReschedulePostInput {
+  postId: string;
+  agencyId: string;
+  caption: string;
+  scheduledAt: string;
+}
+
+export interface ReschedulePostResult {
+  ok: boolean;
+  failedPlatforms: Platform[];
+}
+
+/**
+ * Pushes a caption/time change out to every platform the post was already
+ * scheduled on — editing scheduled_at in our own DB alone doesn't move the
+ * publish time Meta itself is holding. Only touches jobs that actually have
+ * a meta_object_id (i.e. schedulePost() already ran for that platform);
+ * still-draft posts have nothing on Meta's side to update yet.
+ */
+export async function reschedulePost(input: ReschedulePostInput): Promise<ReschedulePostResult> {
+  const supabase = await createClient();
+
+  const { data: jobs } = await supabase
+    .from("post_jobs")
+    .select("id, platform, meta_object_id")
+    .eq("post_id", input.postId);
+
+  const failedPlatforms: Platform[] = [];
+
+  for (const job of jobs ?? []) {
+    if (!job.meta_object_id) continue;
+
+    const service = PLATFORM_SERVICE[job.platform];
+    const result = await service.reschedule({
+      agencyId: input.agencyId,
+      platform: job.platform,
+      metaObjectId: job.meta_object_id,
+      caption: input.caption,
+      scheduledAt: input.scheduledAt,
+    });
+
+    if (!result.ok) {
+      failedPlatforms.push(job.platform);
+      await supabase.from("post_jobs").update({ error_message: result.errorMessage ?? null }).eq("id", job.id);
+    }
+  }
+
+  return { ok: failedPlatforms.length === 0, failedPlatforms };
+}
