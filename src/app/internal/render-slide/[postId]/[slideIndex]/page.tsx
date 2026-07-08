@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { DynamicTemplateRenderer } from "@/components/templates/DynamicTemplateRenderer";
+import { RenderReadyWrapper } from "@/components/render/RenderReadyWrapper";
 import { getSlideRenderData } from "@/services/render/renderDataService";
 import { verifyRenderToken } from "@/lib/render/token";
 
@@ -27,12 +28,14 @@ export default async function RenderSlidePage({
 
   return (
     <div className="h-[1080px] w-[1080px] overflow-hidden">
-      <DynamicTemplateRenderer
-        source={data.componentSource!}
-        data={data.previewData}
-        slideIndex={Number(slideIndex) || 0}
-        className="rounded-none shadow-none"
-      />
+      <RenderReadyWrapper>
+        <DynamicTemplateRenderer
+          source={data.componentSource!}
+          data={data.previewData}
+          slideIndex={Number(slideIndex) || 0}
+          className="rounded-none shadow-none"
+        />
+      </RenderReadyWrapper>
     </div>
   );
 }

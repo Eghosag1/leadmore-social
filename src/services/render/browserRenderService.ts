@@ -39,10 +39,13 @@ async function screenshotOnce(url: string): Promise<Buffer> {
 
   try {
     const page = await browser.newPage();
-    // networkidle0 (no more than 0 in-flight requests for 500ms) covers
-    // waiting for the template's images to finish loading without needing
-    // any custom signal from admin-authored template code we don't control.
     await page.goto(url, { waitUntil: "networkidle0", timeout: NAV_TIMEOUT_MS });
+    // networkidle0 alone isn't enough: DynamicTemplateRenderer compiles and
+    // renders the template client-side, after hydration — a screenshot taken
+    // the moment network requests settle can land before React has actually
+    // painted the text. RenderReadyWrapper flips this attribute once the
+    // template has mounted and every image inside it has finished loading.
+    await page.waitForSelector('[data-render-ready="true"]', { timeout: NAV_TIMEOUT_MS });
     const buffer = await page.screenshot({ type: "png" });
     return buffer as Buffer;
   } finally {
@@ -69,7 +72,7 @@ async function screenshotWithRetries(url: string): Promise<Buffer> {
  * with a headless Chromium instance, and uploads the result to the
  * `rendered-posts` Storage bucket.
  *
- * Reliability: up to 3 attempts with backoff (see screenshotWithRetries),
+ * Reliability: up to 2 attempts with backoff (see screenshotWithRetries),
  * and if every attempt still fails, falls back to the untouched source photo
  * instead of throwing — a broken render must never block scheduling a post.
  * Callers can tell a fallback happened because renderedImageUrl will equal
