@@ -4,6 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { listActiveAgencyTemplatesForCustomer } from "@/services/templates/templateService";
 import { CreatePostForm } from "@/components/dashboard/CreatePostForm";
 
+// Route segment config also governs the max duration of Server Actions
+// invoked from this page (createAndSchedulePostAction, which triggers the
+// headless-browser render step) — the default 10s (Hobby) is too short for
+// that. 60s is the Hobby-plan ceiling; see the tightened retry/timeout
+// budget in browserRenderService.ts (worst case ~30s for the slowest slide).
+export const maxDuration = 60;
+
 export default async function CreatePostPage({
   params,
   searchParams,

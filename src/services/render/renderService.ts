@@ -44,15 +44,23 @@ export async function renderPost(postId: string): Promise<void> {
 
   if (error) throw new Error(error.message);
 
-  for (const slide of slides ?? []) {
-    const { renderedImageUrl } = await browserRenderService.renderSlide({
-      postId,
-      slideId: slide.id,
-      sourceImageUrl: slide.image_url,
-      slideIndex: slide.sort_order,
-    });
-    await supabase.from("post_slides").update({ rendered_image_url: renderedImageUrl }).eq("id", slide.id);
-  }
+  // Rendered in parallel, not sequentially — each slide launches its own
+  // headless Chromium instance (see browserRenderService), and this all runs
+  // inside one serverless function with a finite maxDuration. Awaiting one
+  // slide at a time would multiply the per-slide worst-case time by the
+  // carousel's slide count; running them concurrently bounds the total time
+  // to the single slowest slide instead.
+  await Promise.all(
+    (slides ?? []).map(async (slide) => {
+      const { renderedImageUrl } = await browserRenderService.renderSlide({
+        postId,
+        slideId: slide.id,
+        sourceImageUrl: slide.image_url,
+        slideIndex: slide.sort_order,
+      });
+      await supabase.from("post_slides").update({ rendered_image_url: renderedImageUrl }).eq("id", slide.id);
+    }),
+  );
 
   await supabase.from("posts").update({ status: "ready" }).eq("id", postId);
 }

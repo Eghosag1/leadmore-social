@@ -6,8 +6,13 @@ import { signRenderToken } from "@/lib/render/token";
 import { getSlideRenderData } from "@/services/render/renderDataService";
 import type { RenderService, RenderSlideInput, RenderSlideResult } from "./renderService";
 
-const MAX_ATTEMPTS = 3;
-const NAV_TIMEOUT_MS = 20_000;
+// Kept tight on purpose: this runs inside a Vercel serverless function with a
+// finite maxDuration (see the "use server" file that calls into renderPost()
+// — 60s there, the Hobby-plan ceiling). Worst case here is ~30s
+// (15s + 0.5s backoff + 15s), leaving headroom for the rest of the action's
+// own DB/API work even for a single slide.
+const MAX_ATTEMPTS = 2;
+const NAV_TIMEOUT_MS = 15_000;
 
 function siteUrl(): string {
   if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
