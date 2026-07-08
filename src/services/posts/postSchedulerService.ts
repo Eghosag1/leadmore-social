@@ -149,14 +149,20 @@ export interface ReschedulePostResult {
  * publish time Meta itself is holding. Only touches jobs that actually have
  * a meta_object_id (i.e. schedulePost() already ran for that platform);
  * still-draft posts have nothing on Meta's side to update yet.
+ *
+ * facebookPublishingService.reschedule() deletes the old scheduled post and
+ * creates a fresh one (in-place field updates aren't permitted for our app —
+ * see the comment there), so this always needs the source image(s) again and
+ * must persist the *new* meta_object_id, not just the error state.
  */
 export async function reschedulePost(input: ReschedulePostInput): Promise<ReschedulePostResult> {
   const supabase = await createClient();
 
-  const { data: jobs } = await supabase
-    .from("post_jobs")
-    .select("id, platform, meta_object_id")
-    .eq("post_id", input.postId);
+  const [{ data: jobs }, { data: slides }] = await Promise.all([
+    supabase.from("post_jobs").select("id, platform, meta_object_id").eq("post_id", input.postId),
+    supabase.from("post_slides").select("image_url").eq("post_id", input.postId).order("sort_order"),
+  ]);
+  const imageUrls = (slides ?? []).map((s) => s.image_url);
 
   const failedPlatforms: Platform[] = [];
   const errors: { platform: Platform; message: string }[] = [];
@@ -171,12 +177,18 @@ export async function reschedulePost(input: ReschedulePostInput): Promise<Resche
       metaObjectId: job.meta_object_id,
       caption: input.caption,
       scheduledAt: input.scheduledAt,
+      imageUrls,
     });
 
     if (!result.ok) {
       failedPlatforms.push(job.platform);
       errors.push({ platform: job.platform, message: result.errorMessage ?? "Onbekende fout." });
       await supabase.from("post_jobs").update({ error_message: result.errorMessage ?? null }).eq("id", job.id);
+    } else {
+      await supabase
+        .from("post_jobs")
+        .update({ meta_object_id: result.metaObjectId ?? job.meta_object_id, error_message: null })
+        .eq("id", job.id);
     }
   }
 
