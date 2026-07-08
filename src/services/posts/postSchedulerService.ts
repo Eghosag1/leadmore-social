@@ -140,6 +140,7 @@ export interface ReschedulePostInput {
 export interface ReschedulePostResult {
   ok: boolean;
   failedPlatforms: Platform[];
+  errors: { platform: Platform; message: string }[];
 }
 
 /**
@@ -158,6 +159,7 @@ export async function reschedulePost(input: ReschedulePostInput): Promise<Resche
     .eq("post_id", input.postId);
 
   const failedPlatforms: Platform[] = [];
+  const errors: { platform: Platform; message: string }[] = [];
 
   for (const job of jobs ?? []) {
     if (!job.meta_object_id) continue;
@@ -173,9 +175,10 @@ export async function reschedulePost(input: ReschedulePostInput): Promise<Resche
 
     if (!result.ok) {
       failedPlatforms.push(job.platform);
+      errors.push({ platform: job.platform, message: result.errorMessage ?? "Onbekende fout." });
       await supabase.from("post_jobs").update({ error_message: result.errorMessage ?? null }).eq("id", job.id);
     }
   }
 
-  return { ok: failedPlatforms.length === 0, failedPlatforms };
+  return { ok: failedPlatforms.length === 0, failedPlatforms, errors };
 }
