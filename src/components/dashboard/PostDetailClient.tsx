@@ -32,6 +32,7 @@ export function PostDetailClient({
   previewData,
   agencyName,
   agencyLogo,
+  hasRenderFallback,
 }: {
   postId: string;
   property: PropertyRow;
@@ -45,6 +46,7 @@ export function PostDetailClient({
   previewData: TemplateRenderProps;
   agencyName: string;
   agencyLogo?: string;
+  hasRenderFallback: boolean;
 }) {
   const [captionSource, setCaptionSource] = useState<FieldSourceValue>(MANUAL_SOURCE);
   const [caption, setCaption] = useState(initialCaption);
@@ -68,6 +70,13 @@ export function PostDetailClient({
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="flex flex-col gap-6">
+        {hasRenderFallback && (
+          <Alert variant="destructive">
+            <AlertDescription>
+              Deze post toont de originele foto zonder overlay — het genereren van de branded afbeelding is mislukt.
+            </AlertDescription>
+          </Alert>
+        )}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Status</CardTitle>

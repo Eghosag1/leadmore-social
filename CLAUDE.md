@@ -18,9 +18,10 @@ uitdrukkelijk **geen Canva-editor en geen drag-and-drop layout builder**.
   (`facebookPublishingService`) is intussen **echt** — zie "Meta (Facebook) integratie" onder "Mock services"
   hieronder. Alles is geschreven achter een interface (`CrmService`, `MetaPublishingService`) zodat een echte
   integratie er telkens gewoon voor in de plaats komt.
-- **Rendering:** `renderService` heeft de juiste interface maar doet nu geen echte beeldcompositie (echoot de
-  brontfoto terug als "rendered" resultaat). De template-preview in de browser (de React componenten zelf) is al
-  wél de echte, uiteindelijke visual.
+- **Rendering:** `renderPost()` gebruikt intussen `browserRenderService` — een **echte** headless-Chromium
+  screenshot van de template (zie "Echte beeldcompositie" onder "Mock services" hieronder). `mockRenderService`
+  (kale brontfoto teruggeven) blijft in `renderService.ts` staan als lokaal fallback-alternatief, maar wordt niet
+  meer standaard gebruikt.
 
 ## Technische architectuur
 
@@ -239,6 +240,33 @@ crash.
 Alle mock-vervangingen raken enkel bestanden in `src/services/**` — de rest van de app (pagina's, services die
 ervan afhangen zoals `postSchedulerService`) blijft ongewijzigd omdat alles achter de `CrmService` /
 `MetaPublishingService` interfaces (`src/types/domain.ts`) is geschreven.
+
+### Echte beeldcompositie (branch `feature/real-image-rendering`, nog niet op main)
+
+`renderPost()` (`src/services/render/renderService.ts`) roept nu `browserRenderService` aan i.p.v. de mock: voor
+elke slide van een post mét template wordt een headless Chromium-instantie (`puppeteer-core` +
+`@sparticuz/chromium`, de Vercel/Lambda-compatibele combinatie) naar een **interne, ongeauthenticeerde pagina**
+gestuurd (`src/app/internal/render-slide/[postId]/[slideIndex]/page.tsx`) die exact `DynamicTemplateRenderer`
+toont — dezelfde component als de live preview, dus geen enkele template hoeft aangepast te worden. Satori/
+`@vercel/og` viel af als alternatief: dat rendert enkel inline `style`-objecten, geen Tailwind-classNames — en elk
+admin-template is met Tailwind geschreven (vast schrijfcontract, zie hierboven).
+
+Autorisatie voor die interne pagina loopt niet via `requireRole()` (Puppeteer benadert 'm server-naar-server,
+geen gebruikerssessie) maar via een HMAC-ondertekend `?token=` (`src/lib/render/token.ts`, zelfde patroon als de
+Meta OAuth `state`-param). De screenshot wordt geüpload naar de al bestaande `rendered-posts`-bucket
+(`0002_storage.sql`) en die URL komt in `post_slides.rendered_image_url` — `schedulePost()`/`reschedulePost()`
+gebruiken die kolom (met fallback op `image_url`) voor de Meta-publish-call i.p.v. de kale brontfoto.
+
+**Betrouwbaarheid**: tot 3 renderpogingen met backoff bij een mislukking, en als het na alle pogingen nog steeds
+faalt, valt de pipeline terug op de brontfoto in plaats van `schedulePost()` te laten crashen — een mislukte
+render mag nooit een post blokkeren. Die fallback is wel zichtbaar: `hasRenderFallback`
+(`src/services/posts/postDetailService.ts`, gedetecteerd via `rendered_image_url === image_url` op een slide van
+een post mét template) toont een waarschuwing op de post-detailpagina i.p.v. stilzwijgend een ongebrande post de
+deur uit te laten gaan.
+
+**Nieuwe env-var**: `NEXT_PUBLIC_SITE_URL` (absolute URL van de app zelf, nodig omdat Puppeteer niet relatief kan
+navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Optioneel voor lokale dev:
+`CHROME_EXECUTABLE_PATH` (`@sparticuz/chromium`'s binary is Lambda-only, lokaal wordt een systeem-Chrome gebruikt).
 
 ## Lokale setup
 

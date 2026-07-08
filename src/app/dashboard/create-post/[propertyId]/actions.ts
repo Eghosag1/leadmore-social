@@ -52,7 +52,6 @@ export async function createAndSchedulePostAction(
   let agencyTemplateId: string | null = null;
   let postType: PostType = postTypeField;
   let slides: { imageUrl: string; textContent: Record<string, unknown> }[];
-  let imageUrls: string[];
 
   if (mode === "own") {
     const { data: propertyImages } = await supabase
@@ -73,7 +72,6 @@ export async function createAndSchedulePostAction(
       imageUrl: url,
       textContent: index === 0 ? { title, titleSource, description, descriptionSource } : { slideIndex: index },
     }));
-    imageUrls = urls;
   } else {
     if (!templateId || !coverImageUrl) {
       return { error: "Kies een template en foto voor u verdergaat." };
@@ -96,7 +94,6 @@ export async function createAndSchedulePostAction(
       imageUrl: coverImageUrl,
       textContent: index === 0 ? { title, titleSource, description, descriptionSource } : { slideIndex: index },
     }));
-    imageUrls = [coverImageUrl];
   }
 
   if (!title) {
@@ -119,7 +116,6 @@ export async function createAndSchedulePostAction(
     platforms,
     scheduledAt: scheduledAt.toISOString(),
     caption: caption || title,
-    imageUrls,
   });
 
   if (!result.ok) {

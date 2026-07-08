@@ -62,7 +62,6 @@ export interface SchedulePostInput {
   platforms: Platform[];
   scheduledAt: string;
   caption: string;
-  imageUrls: string[];
 }
 
 export interface SchedulePostResult {
@@ -87,6 +86,17 @@ export async function schedulePost(input: SchedulePostInput): Promise<SchedulePo
 
   await renderPost(input.postId);
 
+  // Read back the rendered images (falls back to the raw source photo per
+  // slide when there's no template, or when rendering itself fell back —
+  // see browserRenderService) rather than trusting whatever the caller had
+  // before rendering ran.
+  const { data: slides } = await supabase
+    .from("post_slides")
+    .select("image_url, rendered_image_url")
+    .eq("post_id", input.postId)
+    .order("sort_order");
+  const imageUrls = (slides ?? []).map((s) => s.rendered_image_url ?? s.image_url);
+
   await supabase
     .from("posts")
     .update({ status: "scheduled", scheduled_at: input.scheduledAt })
@@ -100,7 +110,7 @@ export async function schedulePost(input: SchedulePostInput): Promise<SchedulePo
       agencyId: input.agencyId,
       platform,
       caption: input.caption,
-      imageUrls: input.imageUrls,
+      imageUrls,
       scheduledAt: input.scheduledAt,
     });
 
@@ -160,9 +170,9 @@ export async function reschedulePost(input: ReschedulePostInput): Promise<Resche
 
   const [{ data: jobs }, { data: slides }] = await Promise.all([
     supabase.from("post_jobs").select("id, platform, meta_object_id").eq("post_id", input.postId),
-    supabase.from("post_slides").select("image_url").eq("post_id", input.postId).order("sort_order"),
+    supabase.from("post_slides").select("image_url, rendered_image_url").eq("post_id", input.postId).order("sort_order"),
   ]);
-  const imageUrls = (slides ?? []).map((s) => s.image_url);
+  const imageUrls = (slides ?? []).map((s) => s.rendered_image_url ?? s.image_url);
 
   const failedPlatforms: Platform[] = [];
   const errors: { platform: Platform; message: string }[] = [];

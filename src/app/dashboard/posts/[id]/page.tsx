@@ -40,6 +40,7 @@ export default async function PostDetailPage({
         previewData={data.previewData}
         agencyName={data.agencyName}
         agencyLogo={data.agencyLogo}
+        hasRenderFallback={data.hasRenderFallback}
       />
     </div>
   );
