@@ -22,6 +22,42 @@ async function getPageToken(agencyId: string): Promise<{ facebookPageId: string;
   return { facebookPageId: connection.facebook_page_id, pageToken: decryptToken(connection.access_token_encrypted) };
 }
 
+async function createScheduledPhotoPost(params: {
+  facebookPageId: string;
+  pageToken: string;
+  imageUrl: string;
+  caption: string;
+  scheduledAt: string | null;
+}): Promise<MetaSchedulingResult> {
+  try {
+    const body = new URLSearchParams({
+      url: params.imageUrl,
+      caption: params.caption,
+      access_token: params.pageToken,
+    });
+
+    if (params.scheduledAt) {
+      const publishTime = Math.floor(new Date(params.scheduledAt).getTime() / 1000);
+      body.set("published", "false");
+      body.set("scheduled_publish_time", String(publishTime));
+    }
+
+    const response = await fetch(`${GRAPH_BASE}/${params.facebookPageId}/photos`, {
+      method: "POST",
+      body,
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      return { ok: false, errorMessage: result?.error?.message ?? `Facebook API-fout (${response.status})` };
+    }
+
+    return { ok: true, metaObjectId: result.post_id ?? result.id };
+  } catch (error) {
+    return { ok: false, errorMessage: error instanceof Error ? error.message : "Onbekende fout bij Facebook-publicatie." };
+  }
+}
+
 /**
  * Real Facebook Graph API integration for single-image posts.
  *
@@ -37,69 +73,50 @@ export const facebookPublishingService: MetaPublishingService = {
     if ("error" in connection) return { ok: false, errorMessage: connection.error };
 
     const imageUrl = request.imageUrls[0];
-    if (!imageUrl) {
-      return { ok: false, errorMessage: "Geen foto om te posten." };
-    }
+    if (!imageUrl) return { ok: false, errorMessage: "Geen foto om te posten." };
 
-    try {
-      const body = new URLSearchParams({
-        url: imageUrl,
-        caption: request.caption,
-        access_token: connection.pageToken,
-      });
-
-      if (request.scheduledAt) {
-        const publishTime = Math.floor(new Date(request.scheduledAt).getTime() / 1000);
-        body.set("published", "false");
-        body.set("scheduled_publish_time", String(publishTime));
-      }
-
-      const response = await fetch(`${GRAPH_BASE}/${connection.facebookPageId}/photos`, {
-        method: "POST",
-        body,
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { ok: false, errorMessage: result?.error?.message ?? `Facebook API-fout (${response.status})` };
-      }
-
-      return { ok: true, metaObjectId: result.post_id ?? result.id };
-    } catch (error) {
-      return { ok: false, errorMessage: error instanceof Error ? error.message : "Onbekende fout bij Facebook-publicatie." };
-    }
+    return createScheduledPhotoPost({
+      facebookPageId: connection.facebookPageId,
+      pageToken: connection.pageToken,
+      imageUrl,
+      caption: request.caption,
+      scheduledAt: request.scheduledAt,
+    });
   },
 
   /**
-   * Updates an already-scheduled (not yet published) Page post's caption and
-   * scheduled_publish_time in place — Facebook supports this via a plain
-   * POST to the post's own node ID, no need to delete/recreate it.
+   * Confirmed via manual testing: updating scheduled_publish_time in place
+   * via POST /{post-id} fails with Graph API error #10 ("Application does
+   * not have the capability to make this API call") — our app's access
+   * level doesn't support editing a scheduled post's fields after creation.
+   * Instead: delete the old scheduled post and create a fresh one, reusing
+   * the exact code path that's already confirmed working for schedule().
    */
   async reschedule(request: MetaRescheduleRequest): Promise<MetaSchedulingResult> {
     const connection = await getPageToken(request.agencyId);
     if ("error" in connection) return { ok: false, errorMessage: connection.error };
 
+    const imageUrl = request.imageUrls[0];
+    if (!imageUrl) return { ok: false, errorMessage: "Geen foto om te posten." };
+
     try {
-      const publishTime = Math.floor(new Date(request.scheduledAt).getTime() / 1000);
-      const body = new URLSearchParams({
-        message: request.caption,
-        scheduled_publish_time: String(publishTime),
-        access_token: connection.pageToken,
+      const deleteResponse = await fetch(`${GRAPH_BASE}/${request.metaObjectId}?access_token=${encodeURIComponent(connection.pageToken)}`, {
+        method: "DELETE",
       });
-
-      const response = await fetch(`${GRAPH_BASE}/${request.metaObjectId}`, {
-        method: "POST",
-        body,
-      });
-      const result = await response.json();
-
-      if (!response.ok) {
-        return { ok: false, errorMessage: result?.error?.message ?? `Facebook API-fout (${response.status})` };
+      if (!deleteResponse.ok) {
+        const deleteResult = await deleteResponse.json();
+        return { ok: false, errorMessage: deleteResult?.error?.message ?? `Kon oude geplande post niet verwijderen (${deleteResponse.status})` };
       }
-
-      return { ok: true, metaObjectId: request.metaObjectId };
     } catch (error) {
-      return { ok: false, errorMessage: error instanceof Error ? error.message : "Onbekende fout bij herplannen op Facebook." };
+      return { ok: false, errorMessage: error instanceof Error ? error.message : "Onbekende fout bij verwijderen van de oude post." };
     }
+
+    return createScheduledPhotoPost({
+      facebookPageId: connection.facebookPageId,
+      pageToken: connection.pageToken,
+      imageUrl,
+      caption: request.caption,
+      scheduledAt: request.scheduledAt,
+    });
   },
 };

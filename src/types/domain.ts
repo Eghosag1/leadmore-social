@@ -108,6 +108,8 @@ export interface MetaRescheduleRequest {
   metaObjectId: string;
   caption: string;
   scheduledAt: string;
+  /** Needed to recreate the post (delete + recreate — see facebookPublishingService.reschedule). */
+  imageUrls: string[];
 }
 
 export interface MetaPublishingService {
