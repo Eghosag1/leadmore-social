@@ -50,8 +50,13 @@ export async function GET(request: NextRequest) {
     if (dbError) throw new Error(dbError.message);
 
     settingsUrl.searchParams.set("meta", "connected");
-  } catch {
+  } catch (err) {
+    // Logged server-side (visible in Vercel's function logs) and surfaced
+    // (truncated) in the settings-page banner so failures are diagnosable
+    // without needing log access every time.
+    console.error("[meta/callback] OAuth exchange failed:", err);
     settingsUrl.searchParams.set("meta", "error");
+    if (err instanceof Error) settingsUrl.searchParams.set("meta_error", err.message.slice(0, 300));
   }
 
   return NextResponse.redirect(settingsUrl);

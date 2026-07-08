@@ -23,10 +23,10 @@ export default async function AgencySettingsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ meta?: string }>;
+  searchParams: Promise<{ meta?: string; meta_error?: string }>;
 }) {
   const { id } = await params;
-  const { meta } = await searchParams;
+  const { meta, meta_error: metaError } = await searchParams;
   await requireRole(["super_admin"]);
   const supabase = await createClient();
 
@@ -108,6 +108,7 @@ export default async function AgencySettingsPage({
                 <Alert variant="destructive">
                   <AlertDescription>
                     Facebook-koppeling mislukt. Probeer opnieuw, of vul de velden hieronder handmatig in.
+                    {metaError && <span className="mt-1 block font-mono text-xs opacity-80">{metaError}</span>}
                   </AlertDescription>
                 </Alert>
               )}
