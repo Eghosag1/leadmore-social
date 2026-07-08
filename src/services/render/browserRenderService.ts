@@ -24,6 +24,18 @@ async function executablePath(): Promise<string> {
   return process.env.CHROME_EXECUTABLE_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 }
 
+/**
+ * chromium.args (from @sparticuz/chromium) is tuned for AWS Lambda's
+ * container — notably `--single-process` and `--no-zygote`, which Chromium
+ * itself does not support on macOS and which hang indefinitely with a
+ * regular desktop Chrome/Chromium binary. Only pair those flags with the
+ * Lambda-only binary they were designed for; a plain local launch needs none
+ * of them.
+ */
+function launchArgs(): string[] {
+  return process.env.VERCEL ? chromium.args : [];
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -98,7 +110,7 @@ function attachDebugListeners(page: Page, context: string) {
 
 async function screenshotOnce(url: string, context: string): Promise<Buffer> {
   const browser = await puppeteer.launch({
-    args: chromium.args,
+    args: launchArgs(),
     defaultViewport: { width: 1080, height: 1080 },
     executablePath: await executablePath(),
     headless: true,
