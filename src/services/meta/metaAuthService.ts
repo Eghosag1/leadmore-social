@@ -83,20 +83,19 @@ export const metaAuthService = {
       fb_exchange_token: shortLived.access_token,
     });
 
-    // Temporary debug logging while diagnosing why a selected Page doesn't
-    // surface here — remove once the flow is confirmed working end-to-end.
-    const permissions = await graphFetch<{ data: { permission: string; status: string }[] }>("/me/permissions", {
-      access_token: longLived.access_token,
-    });
-    console.log("[metaAuthService] granted permissions:", JSON.stringify(permissions.data));
-
     const pages = await graphFetch<{ data: { id: string; access_token: string }[] }>("/me/accounts", {
       access_token: longLived.access_token,
     });
-    console.log("[metaAuthService] /me/accounts response:", JSON.stringify(pages));
-
     const page = pages.data[0];
-    if (!page) throw new Error("Dit Facebook-account beheert geen enkele Pagina.");
+    if (!page) {
+      // Confirmed via manual testing: Pages owned by a Business Portfolio
+      // sometimes don't surface here even with pages_show_list granted and
+      // the Page connected as a business asset to the app — a standalone
+      // Page (created outside Business Manager) works fine. Root cause not
+      // fully pinned down; if this recurs, log /me/permissions + this
+      // response again before assuming it's the same issue.
+      throw new Error("Dit Facebook-account beheert geen enkele Pagina (of enkel Pagina's binnen een Business Portfolio — probeer een standalone Pagina).");
+    }
 
     const pageDetails = await graphFetch<{ instagram_business_account?: { id: string } }>(`/${page.id}`, {
       fields: "instagram_business_account",

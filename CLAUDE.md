@@ -216,6 +216,14 @@ long-lived user token → Page-token via `/me/accounts` → gekoppeld Instagram-
 `?fields=instagram_business_account`. **Bewuste MVP-vereenvoudiging:** als het account meerdere Pages beheert,
 wordt de eerste uit `/me/accounts` gebruikt — geen Page-kiezer in v1.
 
+**Bevestigd via handmatig testen:** een Pagina die onder een **Business Portfolio** valt, surfacet soms niet via
+`/me/accounts`, zelfs met `pages_show_list` correct "granted" (zichtbaar via `/me/permissions`) én de Pagina expliciet
+als bedrijfsmiddel aan de app gekoppeld in Business Settings. Een standalone Pagina (aangemaakt via gewoon
+facebook.com, niet via business.facebook.com) werkte meteen. Grondoorzaak niet volledig uitgeklaard — mogelijk
+vereist dit Business Verification of een correcte taak-toewijzing op Pagina-niveau (los van de app-toewijzing) in
+Business Manager. Relevant om vooraf te weten bij het onboarden van kantoren: hun Pagina kan in de praktijk
+onder een Business Portfolio vallen.
+
 Tokens worden versleuteld opgeslagen (`src/lib/token-encryption.ts`, AES-256-GCM) — ook het handmatige token-veld
 in `MetaConnectionForm` gaat nu door `encryptToken()`; het veld toont nooit een opgeslagen token terug (leeg laten
 = huidig token behouden, zie `updateAgencyMetaConnectionAction`). `facebookPublishingService.schedule()` ontsleutelt
