@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PhonePreview } from "@/components/dashboard/PhonePreview";
 import { CancelPostButton } from "@/components/dashboard/CancelPostButton";
 import { DownloadImageButton } from "@/components/dashboard/DownloadImageButton";
+import { RenderFailedActions } from "@/components/dashboard/RenderFailedActions";
 import { FieldBindingControl } from "@/components/dashboard/FieldBindingControl";
 import { PostStatusBadge } from "@/components/shared/StatusBadge";
 import { MANUAL_SOURCE, resolvePropertyField, type FieldSourceValue } from "@/lib/field-binding";
@@ -33,7 +34,8 @@ export function PostDetailClient({
   previewData,
   agencyName,
   agencyLogo,
-  hasRenderFallback,
+  renderError,
+  renderOverridden,
   renderedImageUrls,
 }: {
   postId: string;
@@ -48,7 +50,8 @@ export function PostDetailClient({
   previewData: TemplateRenderProps;
   agencyName: string;
   agencyLogo?: string;
-  hasRenderFallback: boolean;
+  renderError: string | null;
+  renderOverridden: boolean;
   renderedImageUrls: (string | null)[];
 }) {
   const [captionSource, setCaptionSource] = useState<FieldSourceValue>(MANUAL_SOURCE);
@@ -67,17 +70,24 @@ export function PostDetailClient({
     setCaptionSource(MANUAL_SOURCE);
   }
 
-  const canEdit = status === "draft" || status === "ready" || status === "scheduled";
+  const canEdit =
+    status === "draft" ||
+    status === "ready" ||
+    status === "rendered" ||
+    status === "scheduled" ||
+    status === "render_failed" ||
+    status === "publish_failed";
   const canCancel = status !== "cancelled" && status !== "published";
   const currentSlideImageUrl = renderedImageUrls[slideIndex] ?? null;
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="flex flex-col gap-6">
-        {hasRenderFallback && (
-          <Alert variant="destructive">
+        {status === "render_failed" && <RenderFailedActions postId={postId} renderError={renderError} />}
+        {status !== "render_failed" && renderOverridden && (
+          <Alert>
             <AlertDescription>
-              Deze post toont de originele foto zonder overlay — het genereren van de branded afbeelding is mislukt.
+              Deze post toont bewust de originele foto zonder overlay — jouw keuze bij het inplannen.
             </AlertDescription>
           </Alert>
         )}

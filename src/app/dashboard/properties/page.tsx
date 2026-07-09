@@ -23,9 +23,13 @@ const POST_STATUS_RANK: Record<PostStatus, number> = {
   published: 6,
   scheduled: 5,
   ready: 4,
+  rendered: 4,
+  pending_render: 3,
   rendering: 3,
   draft: 2,
   failed: 1,
+  render_failed: 1,
+  publish_failed: 1,
   cancelled: 0,
 };
 

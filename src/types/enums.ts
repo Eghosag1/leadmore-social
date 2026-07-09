@@ -18,11 +18,15 @@ export type BillableType = (typeof BILLABLE_TYPES)[number];
 
 export const POST_STATUSES = [
   "draft",
+  "pending_render",
   "rendering",
   "ready",
+  "rendered",
   "scheduled",
   "published",
   "failed",
+  "render_failed",
+  "publish_failed",
   "cancelled",
 ] as const;
 export type PostStatus = (typeof POST_STATUSES)[number];

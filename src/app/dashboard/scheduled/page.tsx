@@ -14,7 +14,7 @@ import type { Platform, PostStatus } from "@/types/enums";
 const PLATFORM_LABEL: Record<Platform, string> = { facebook: "FB", instagram: "IG" };
 
 // Mirrors PostDetailClient's canEdit — these statuses still allow editing caption/date.
-const EDITABLE_STATUSES: PostStatus[] = ["draft", "ready", "scheduled"];
+const EDITABLE_STATUSES: PostStatus[] = ["draft", "ready", "rendered", "scheduled", "render_failed", "publish_failed"];
 
 export default async function PostsPage({ searchParams }: { searchParams: Promise<{ created?: string }> }) {
   const { created } = await searchParams;

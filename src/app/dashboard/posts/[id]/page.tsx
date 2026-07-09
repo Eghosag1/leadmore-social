@@ -40,7 +40,8 @@ export default async function PostDetailPage({
         previewData={data.previewData}
         agencyName={data.agencyName}
         agencyLogo={data.agencyLogo}
-        hasRenderFallback={data.hasRenderFallback}
+        renderError={data.renderError}
+        renderOverridden={data.renderOverridden}
         renderedImageUrls={data.renderedImageUrls}
       />
     </div>

@@ -19,12 +19,12 @@ function siteUrl(): string {
  * (screenshotCanvas, shared with templateValidationService), and uploads the
  * result to the `rendered-posts` Storage bucket.
  *
- * Reliability: up to 2 attempts with backoff, and if every attempt still
- * fails, falls back to the untouched source photo instead of throwing — a
- * broken render must never block scheduling a post. Callers can tell a
- * fallback happened because renderedImageUrl will equal sourceImageUrl for a
- * slide that does have a template (see the warning banner on the post
- * detail page).
+ * Reliability: up to 2 attempts with backoff (inside screenshotCanvas) for
+ * transient flakiness. Beyond that, this throws rather than silently
+ * substituting the source photo — a broken render must block scheduling, not
+ * publish an unbranded photo unnoticed. Callers (renderPostForScheduling)
+ * decide what happens next: render_failed, with the user choosing to retry or
+ * explicitly opt into the original photo.
  */
 export const browserRenderService: RenderService = {
   async renderSlide(input: RenderSlideInput): Promise<RenderSlideResult> {
@@ -38,21 +38,16 @@ export const browserRenderService: RenderService = {
     const url = `${siteUrl()}/internal/render-slide/${input.postId}/${input.slideIndex}?token=${token}`;
     const context = `post ${input.postId} slide ${input.slideIndex}`;
 
-    try {
-      const buffer = await screenshotCanvas(url, context);
-      const admin = createAdminClient();
-      const path = `${input.postId}/${input.slideId}.png`;
-      const { error: uploadError } = await admin.storage.from("rendered-posts").upload(path, buffer, {
-        contentType: "image/png",
-        upsert: true,
-      });
-      if (uploadError) throw new Error(uploadError.message);
+    const buffer = await screenshotCanvas(url, context);
+    const admin = createAdminClient();
+    const path = `${input.postId}/${input.slideId}.png`;
+    const { error: uploadError } = await admin.storage.from("rendered-posts").upload(path, buffer, {
+      contentType: "image/png",
+      upsert: true,
+    });
+    if (uploadError) throw new Error(uploadError.message);
 
-      const { data: publicUrl } = admin.storage.from("rendered-posts").getPublicUrl(path);
-      return { renderedImageUrl: publicUrl.publicUrl };
-    } catch (error) {
-      console.error(`[browserRenderService] Render failed for ${context}, falling back to source photo:`, error);
-      return { renderedImageUrl: input.sourceImageUrl };
-    }
+    const { data: publicUrl } = admin.storage.from("rendered-posts").getPublicUrl(path);
+    return { renderedImageUrl: publicUrl.publicUrl };
   },
 };

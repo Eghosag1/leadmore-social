@@ -18,11 +18,20 @@ export interface PostDetailData {
   previewData: TemplateRenderProps;
   agencyName: string;
   agencyLogo?: string;
-  /** True when this post has a template but rendering fell back to an unbranded source photo for at least one slide — see browserRenderService. */
-  hasRenderFallback: boolean;
+  /** Specific reason the render failed, set only when status is render_failed — see RenderFailedActions. */
+  renderError: string | null;
+  /** True when at least one slide deliberately uses the unbranded source photo via the explicit "use original photo" override — informational only, not an unresolved problem (contrast with status === 'render_failed'). */
+  renderOverridden: boolean;
   /** Ordered by sort_order (same order as slideIndex in PhonePreview). Null entries mean that slide hasn't been rendered yet (still draft). */
   renderedImageUrls: (string | null)[];
 }
+
+// How long a post can plausibly sit on 'rendering' before it's more likely
+// stuck (an aborted request, a crash outside browserRenderService's own
+// try/catch) than genuinely still in progress — well above the render
+// pipeline's own internal retry budget (2 attempts x 15s timeout, see
+// screenshotCanvas.ts).
+const STALE_RENDERING_THRESHOLD_MS = 3 * 60 * 1000;
 
 /**
  * Assembles everything a post detail view needs (full page or quick-view
@@ -34,6 +43,17 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
 
   const { data: post } = await supabase.from("posts").select("*").eq("id", postId).eq("agency_id", agencyId).maybeSingle();
   if (!post) return null;
+
+  // No background queue exists to notice a request that died mid-render
+  // (exactly what happened during local testing: an aborted connection left
+  // a post on 'rendering' forever). Reconcile lazily instead, the moment
+  // anyone actually looks at this post.
+  if (post.status === "rendering" && Date.now() - new Date(post.updated_at).getTime() > STALE_RENDERING_THRESHOLD_MS) {
+    const staleError = "Renderen duurde te lang of werd onderbroken.";
+    await supabase.from("posts").update({ status: "render_failed", render_error: staleError }).eq("id", postId);
+    post.status = "render_failed";
+    post.render_error = staleError;
+  }
 
   const [{ data: property }, { data: agency }, { data: slides }, { data: jobs }] = await Promise.all([
     supabase.from("properties").select("*").eq("id", post.property_id).maybeSingle(),
@@ -78,8 +98,7 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     });
   }
 
-  const hasRenderFallback =
-    post.agency_template_id !== null && (slides ?? []).some((slide) => slide.rendered_image_url === slide.image_url);
+  const renderOverridden = (slides ?? []).some((slide) => slide.render_overridden);
 
   return {
     postId,
@@ -94,7 +113,8 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     previewData,
     agencyName: agency?.name ?? "",
     agencyLogo: agency?.logo_url ?? undefined,
-    hasRenderFallback,
+    renderError: post.render_error,
+    renderOverridden,
     renderedImageUrls: (slides ?? []).map((slide) => slide.rendered_image_url),
   };
 }

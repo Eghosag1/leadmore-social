@@ -127,6 +127,10 @@ export type PostRow = {
   post_type: PostType;
   caption: string;
   status: PostStatus;
+  /** Chosen at creation time, before rendering ever runs — see publishPost in postSchedulerService.ts. */
+  platforms: Platform[];
+  /** Specific reason the last render attempt failed, set only when status is render_failed. */
+  render_error: string | null;
   scheduled_at: string | null;
   created_by: string;
   created_at: string;
@@ -140,6 +144,8 @@ export type PostSlideRow = {
   image_url: string;
   text_content: Record<string, unknown>;
   rendered_image_url: string | null;
+  /** True only after the explicit "use original photo anyway" action — see useOriginalPhotoAction. */
+  render_overridden: boolean;
   created_at: string;
 };
 

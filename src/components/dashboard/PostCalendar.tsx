@@ -29,11 +29,15 @@ export interface CalendarPost {
 
 const STATUS_DOT: Record<PostStatus, string> = {
   draft: "bg-neutral-300",
+  pending_render: "bg-blue-400",
   rendering: "bg-blue-400",
   ready: "bg-blue-400",
+  rendered: "bg-blue-400",
   scheduled: "bg-emerald-500",
   published: "bg-emerald-500",
   failed: "bg-red-500",
+  render_failed: "bg-red-500",
+  publish_failed: "bg-red-500",
   cancelled: "bg-amber-400",
 };
 

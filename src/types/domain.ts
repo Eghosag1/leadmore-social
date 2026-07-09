@@ -124,11 +124,19 @@ export interface PostStatusBadgeMeta {
 
 export const POST_STATUS_META: Record<PostStatus, PostStatusBadgeMeta> = {
   draft: { label: "Concept", tone: "neutral" },
+  pending_render: { label: "In wachtrij", tone: "info" },
   rendering: { label: "Wordt gerenderd", tone: "info" },
+  // Legacy value — posts created before the render/publish split may still carry
+  // this; 'rendered' is what new posts use for the same meaning.
   ready: { label: "Klaar", tone: "info" },
+  rendered: { label: "Gerenderd", tone: "info" },
   scheduled: { label: "Ingepland", tone: "success" },
   published: { label: "Gepubliceerd", tone: "success" },
+  // Legacy value — new posts use render_failed/publish_failed for the same
+  // meaning, split by which step actually failed.
   failed: { label: "Mislukt", tone: "danger" },
+  render_failed: { label: "Renderen mislukt", tone: "danger" },
+  publish_failed: { label: "Publiceren mislukt", tone: "danger" },
   cancelled: { label: "Geannuleerd", tone: "warning" },
 };
 

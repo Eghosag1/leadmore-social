@@ -1,6 +1,5 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { renderPost } from "@/services/render/renderService";
 import { facebookPublishingService } from "@/services/meta/facebookPublishingService";
 import { instagramPublishingService } from "@/services/meta/instagramPublishingService";
 import type { Platform, PostType } from "@/types/enums";
@@ -19,6 +18,8 @@ export interface CreatePostInput {
   caption: string;
   createdBy: string;
   slides: CreatePostSlideInput[];
+  /** Persisted immediately, before rendering ever runs — see publishPost, which reads this back instead of taking it as a parameter (so a retry after a render failure doesn't need to re-collect it). */
+  platforms: Platform[];
 }
 
 /** Step 10 of the post flow: "App maakt post aan" (status starts as draft). */
@@ -35,6 +36,7 @@ export async function createPost(input: CreatePostInput): Promise<{ postId: stri
       caption: input.caption,
       status: "draft",
       created_by: input.createdBy,
+      platforms: input.platforms,
     })
     .select("id")
     .single();
@@ -56,15 +58,14 @@ export async function createPost(input: CreatePostInput): Promise<{ postId: stri
   return { postId: post.id };
 }
 
-export interface SchedulePostInput {
+export interface PublishPostInput {
   postId: string;
   agencyId: string;
-  platforms: Platform[];
   scheduledAt: string;
   caption: string;
 }
 
-export interface SchedulePostResult {
+export interface PublishPostResult {
   ok: boolean;
   failedPlatforms: Platform[];
 }
@@ -75,21 +76,22 @@ const PLATFORM_SERVICE = {
 } as const;
 
 /**
- * Steps 10-12 of the post flow: render the post, create one post_jobs row per
- * chosen platform, and hand each off to its publishing service (mock today,
- * real Meta Graph API later — see facebookPublishingService /
- * instagramPublishingService). Status flow: draft -> rendering -> ready ->
- * scheduled (or failed if every platform failed to schedule).
+ * The publish half of the post flow — create one post_jobs row per platform
+ * the post was created with (posts.platforms, not a parameter here, so a
+ * retry after a render failure doesn't need to re-collect it) and hand each
+ * off to its publishing service (mock today, real Meta Graph API later — see
+ * facebookPublishingService / instagramPublishingService).
+ *
+ * Precondition: the post must already be `rendered` — call
+ * renderPostForScheduling() (or the explicit "use original photo" override)
+ * first. This function doesn't render anything itself.
  */
-export async function schedulePost(input: SchedulePostInput): Promise<SchedulePostResult> {
+export async function publishPost(input: PublishPostInput): Promise<PublishPostResult> {
   const supabase = await createClient();
 
-  await renderPost(input.postId);
+  const { data: post } = await supabase.from("posts").select("platforms").eq("id", input.postId).single();
+  const platforms = post?.platforms ?? [];
 
-  // Read back the rendered images (falls back to the raw source photo per
-  // slide when there's no template, or when rendering itself fell back —
-  // see browserRenderService) rather than trusting whatever the caller had
-  // before rendering ran.
   const { data: slides } = await supabase
     .from("post_slides")
     .select("image_url, rendered_image_url")
@@ -104,7 +106,7 @@ export async function schedulePost(input: SchedulePostInput): Promise<SchedulePo
 
   const failedPlatforms: Platform[] = [];
 
-  for (const platform of input.platforms) {
+  for (const platform of platforms) {
     const service = PLATFORM_SERVICE[platform];
     const result = await service.schedule({
       agencyId: input.agencyId,
@@ -127,8 +129,8 @@ export async function schedulePost(input: SchedulePostInput): Promise<SchedulePo
     if (!result.ok) failedPlatforms.push(platform);
   }
 
-  if (input.platforms.length > 0 && failedPlatforms.length === input.platforms.length) {
-    await supabase.from("posts").update({ status: "failed" }).eq("id", input.postId);
+  if (platforms.length > 0 && failedPlatforms.length === platforms.length) {
+    await supabase.from("posts").update({ status: "publish_failed" }).eq("id", input.postId);
   }
 
   return { ok: failedPlatforms.length === 0, failedPlatforms };

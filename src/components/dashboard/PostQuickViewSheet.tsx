@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PhonePreview } from "@/components/dashboard/PhonePreview";
 import { CancelPostButton } from "@/components/dashboard/CancelPostButton";
+import { RenderFailedActions } from "@/components/dashboard/RenderFailedActions";
 import { FieldBindingControl } from "@/components/dashboard/FieldBindingControl";
 import { PostStatusBadge } from "@/components/shared/StatusBadge";
 import { formatDateInputs } from "@/lib/date-inputs";
@@ -29,7 +30,13 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
   const boundAction = updatePostAction.bind(null, data.postId);
   const [state, formAction, isPending] = useActionState(boundAction, { error: null } as UpdatePostState);
   const { dateValue, timeValue } = formatDateInputs(data.scheduledAt);
-  const canEdit = data.status === "draft" || data.status === "ready" || data.status === "scheduled";
+  const canEdit =
+    data.status === "draft" ||
+    data.status === "ready" ||
+    data.status === "rendered" ||
+    data.status === "scheduled" ||
+    data.status === "render_failed" ||
+    data.status === "publish_failed";
   const canCancel = data.status !== "cancelled" && data.status !== "published";
 
   function handleCaptionSourceChange(source: FieldSourceValue) {
@@ -66,6 +73,15 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
           </div>
         ))}
       </div>
+
+      {data.status === "render_failed" && <RenderFailedActions postId={data.postId} renderError={data.renderError} />}
+      {data.status !== "render_failed" && data.renderOverridden && (
+        <Alert>
+          <AlertDescription>
+            Deze post toont bewust de originele foto zonder overlay — jouw keuze bij het inplannen.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Always side-by-side — the sheet's own width (see PostQuickViewSheet) is set wide enough that this never needs to stack. */}
       <div className="grid grid-cols-[minmax(0,1fr)_280px] items-start gap-6">

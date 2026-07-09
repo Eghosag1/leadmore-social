@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { createPost, schedulePost } from "@/services/posts/postSchedulerService";
+import { createPost, publishPost } from "@/services/posts/postSchedulerService";
+import { renderPostForScheduling } from "@/services/render/renderService";
 import { parseScheduledAt } from "@/lib/scheduled-time";
 import type { Platform, PostType } from "@/types/enums";
 
@@ -108,20 +109,27 @@ export async function createAndSchedulePostAction(
     caption: caption || title,
     createdBy: current.profile.id,
     slides,
+    platforms,
   });
 
-  const result = await schedulePost({
+  // The post now exists for real (chosen photo/template/platforms all
+  // persisted) — from here on, failures are the post-detail page's concern
+  // to resolve (retry / use original photo / check per-platform errors),
+  // not something that should send the user back to a blank form.
+  const renderResult = await renderPostForScheduling(postId);
+  if (!renderResult.ok) {
+    redirect(`/dashboard/posts/${postId}?renderFailed=1`);
+  }
+
+  const publishResult = await publishPost({
     postId,
     agencyId,
-    platforms,
     scheduledAt: scheduledAt.toISOString(),
     caption: caption || title,
   });
 
-  if (!result.ok) {
-    return {
-      error: `Post aangemaakt maar inplannen mislukte voor: ${result.failedPlatforms.join(", ")}. Controleer uw Meta-koppeling.`,
-    };
+  if (!publishResult.ok) {
+    redirect(`/dashboard/posts/${postId}?publishFailed=1`);
   }
 
   redirect("/dashboard/scheduled?created=1");
