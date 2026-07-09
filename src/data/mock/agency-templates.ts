@@ -1,5 +1,5 @@
 import type { TemplateConfig } from "@/types/domain";
-import type { BillableType, PostFormat, TemplateType } from "@/types/enums";
+import type { BillableType, PostFormat, TemplateStatus, TemplateType } from "@/types/enums";
 import { AGENCY_IDS, AGENCY_TEMPLATE_IDS } from "./ids";
 import { MOCK_AGENCIES } from "./agencies";
 import { TEMPLATE_STARTERS } from "../template-starters";
@@ -15,7 +15,13 @@ export interface MockAgencyTemplate {
   post_format: PostFormat;
   config: TemplateConfig;
   preview_image_url: string | null;
-  is_active: boolean;
+  /**
+   * Seed templates skip the real validation flow (npm run seed doesn't spin
+   * up Puppeteer) and are marked `published` directly — an accepted
+   * shortcut for demo data, not something a real admin-created template ever
+   * does (see validateAndPublishTemplate).
+   */
+  status: TemplateStatus;
   included_in_plan: boolean;
   billable_type: BillableType;
   sort_order: number;
@@ -66,7 +72,7 @@ export const MOCK_AGENCY_TEMPLATES: MockAgencyTemplate[] = [
       defaultTexts: { badgeText: "Nieuw op de markt" },
     },
     preview_image_url: null,
-    is_active: true,
+    status: "published",
     included_in_plan: true,
     billable_type: "included",
     sort_order: 1,
@@ -85,7 +91,7 @@ export const MOCK_AGENCY_TEMPLATES: MockAgencyTemplate[] = [
       fields: fullFields,
     },
     preview_image_url: null,
-    is_active: true,
+    status: "published",
     included_in_plan: true,
     billable_type: "included",
     sort_order: 2,
@@ -104,7 +110,7 @@ export const MOCK_AGENCY_TEMPLATES: MockAgencyTemplate[] = [
       fields: { ...fullFields, showBedrooms: false, showBathrooms: false, showSurface: false },
     },
     preview_image_url: null,
-    is_active: true,
+    status: "published",
     included_in_plan: true,
     billable_type: "included",
     sort_order: 3,
@@ -124,7 +130,7 @@ export const MOCK_AGENCY_TEMPLATES: MockAgencyTemplate[] = [
       defaultTexts: { badgeText: "Prijs aangepast" },
     },
     preview_image_url: null,
-    is_active: true,
+    status: "published",
     included_in_plan: false,
     billable_type: "regie",
     sort_order: 4,
@@ -144,7 +150,7 @@ export const MOCK_AGENCY_TEMPLATES: MockAgencyTemplate[] = [
       defaultTexts: { badgeText: "Nieuw op de markt" },
     },
     preview_image_url: null,
-    is_active: true,
+    status: "published",
     included_in_plan: true,
     billable_type: "included",
     sort_order: 1,
@@ -163,7 +169,7 @@ export const MOCK_AGENCY_TEMPLATES: MockAgencyTemplate[] = [
       fields: fullFields,
     },
     preview_image_url: null,
-    is_active: true,
+    status: "published",
     included_in_plan: true,
     billable_type: "included",
     sort_order: 2,
@@ -182,7 +188,7 @@ export const MOCK_AGENCY_TEMPLATES: MockAgencyTemplate[] = [
       fields: { ...fullFields, showBedrooms: false, showBathrooms: false, showSurface: false },
     },
     preview_image_url: null,
-    is_active: true,
+    status: "published",
     included_in_plan: true,
     billable_type: "included",
     sort_order: 3,

@@ -56,13 +56,18 @@ export async function compileTailwindForClassNames(classNames: string[]): Promis
   return result.css;
 }
 
+/** Same hash templateValidationService persists as agency_templates.compiled_css_hash. */
+export function hashTemplateSource(source: string): string {
+  return createHash("sha256").update(source).digest("hex");
+}
+
 // In-memory only — cold starts get an empty cache, but repeated renders of
 // the same template within one warm serverless instance skip recompiling.
 // Keyed by a hash of the source so an edited template can't serve stale CSS.
 const cssCache = new Map<string, string>();
 
 export async function getCompiledCssForTemplate(source: string): Promise<string> {
-  const hash = createHash("sha256").update(source).digest("hex");
+  const hash = hashTemplateSource(source);
   const cached = cssCache.get(hash);
   if (cached !== undefined) return cached;
 

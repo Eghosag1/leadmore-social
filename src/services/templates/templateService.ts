@@ -39,7 +39,7 @@ export async function listActiveAgencyTemplatesForCustomer(agencyId: string): Pr
     .from("agency_templates")
     .select("id, name, description, component_source, slide_count, type, post_format, config, preview_image_url, sort_order")
     .eq("agency_id", agencyId)
-    .eq("is_active", true)
+    .eq("status", "published")
     .order("sort_order");
   if (error) throw new Error(error.message);
   // config is stored as jsonb (Record<string, unknown> at the DB layer); we
@@ -86,7 +86,7 @@ export async function createAgencyTemplate(input: CreateAgencyTemplateInput): Pr
       type: input.slideCount > 1 ? "carousel" : "single",
       post_format: input.postFormat,
       config: input.config as unknown as Record<string, unknown>,
-      is_active: true,
+      status: "draft",
       included_in_plan: input.includedInPlan,
       billable_type: input.includedInPlan ? "included" : "regie",
       sort_order: input.sortOrder,
@@ -105,13 +105,19 @@ export interface UpdateAgencyTemplateInput {
   componentSource?: string;
   slideCount?: number;
   config?: TemplateConfig;
-  isActive?: boolean;
   includedInPlan?: boolean;
   billableType?: AgencyTemplateRow["billable_type"];
   sortOrder?: number;
   previewImageUrl?: string | null;
 }
 
+/**
+ * Editing the source invalidates whatever was last validated — reset back to
+ * `draft` and clear the persisted compiled CSS so a stale, no-longer-matching
+ * render output can never linger under a `published` status. The admin has
+ * to explicitly re-run "Valideer & publiceer" (validateAndPublishTemplate)
+ * before the edited version becomes selectable by an agency again.
+ */
 export async function updateAgencyTemplate(input: UpdateAgencyTemplateInput): Promise<AgencyTemplateRow> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -119,13 +125,19 @@ export async function updateAgencyTemplate(input: UpdateAgencyTemplateInput): Pr
     .update({
       ...(input.name !== undefined && { name: input.name }),
       ...(input.description !== undefined && { description: input.description }),
-      ...(input.componentSource !== undefined && { component_source: input.componentSource }),
+      ...(input.componentSource !== undefined && {
+        component_source: input.componentSource,
+        status: "draft",
+        compiled_css: null,
+        compiled_css_hash: null,
+        validated_at: null,
+        validation_error: null,
+      }),
       ...(input.slideCount !== undefined && {
         slide_count: input.slideCount,
         type: input.slideCount > 1 ? "carousel" : "single",
       }),
       ...(input.config !== undefined && { config: input.config as unknown as Record<string, unknown> }),
-      ...(input.isActive !== undefined && { is_active: input.isActive }),
       ...(input.includedInPlan !== undefined && { included_in_plan: input.includedInPlan }),
       ...(input.billableType !== undefined && { billable_type: input.billableType }),
       ...(input.sortOrder !== undefined && { sort_order: input.sortOrder }),
@@ -139,9 +151,16 @@ export async function updateAgencyTemplate(input: UpdateAgencyTemplateInput): Pr
   return data;
 }
 
-export async function setAgencyTemplateActive(id: string, isActive: boolean): Promise<void> {
+/** Hides a published template from agencies without discarding its validated state — unarchiveAgencyTemplate restores it to `published` directly, no revalidation needed since the source hasn't changed. */
+export async function archiveAgencyTemplate(id: string): Promise<void> {
   const supabase = await createClient();
-  const { error } = await supabase.from("agency_templates").update({ is_active: isActive }).eq("id", id);
+  const { error } = await supabase.from("agency_templates").update({ status: "archived" }).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function unarchiveAgencyTemplate(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("agency_templates").update({ status: "published" }).eq("id", id);
   if (error) throw new Error(error.message);
 }
 

@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { listAgencyTemplatesForAdmin } from "@/services/templates/templateService";
-import { ToggleTemplateActiveButton } from "@/components/admin/ToggleTemplateActiveButton";
+import { TemplateStatusControl } from "@/components/admin/TemplateStatusControl";
 
 export default async function AgencyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -72,7 +72,12 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ i
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <ToggleTemplateActiveButton agencyId={id} templateId={template.id} isActive={template.is_active} />
+                  <TemplateStatusControl
+                    agencyId={id}
+                    templateId={template.id}
+                    status={template.status}
+                    validationError={template.validation_error}
+                  />
                 </TableCell>
                 <TableCell className="flex justify-end gap-2 text-right">
                   <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/admin/agencies/${id}/templates/${template.id}/preview`} />}>

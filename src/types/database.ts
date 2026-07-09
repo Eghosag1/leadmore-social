@@ -13,6 +13,7 @@ import type {
   ProfileRole,
   PropertyStatus,
   PropertyType,
+  TemplateStatus,
   TemplateType,
 } from "./enums";
 
@@ -103,7 +104,13 @@ export type AgencyTemplateRow = {
   post_format: PostFormat;
   config: Record<string, unknown>;
   preview_image_url: string | null;
-  is_active: boolean;
+  status: TemplateStatus;
+  /** Server-compiled Tailwind CSS for this template's actual classNames — see src/lib/render/compile-tailwind.ts. Populated once validation succeeds. */
+  compiled_css: string | null;
+  compiled_css_hash: string | null;
+  validated_at: string | null;
+  /** Human-readable reason the last validation attempt failed, if status is 'failed'. */
+  validation_error: string | null;
   included_in_plan: boolean;
   billable_type: BillableType;
   sort_order: number;

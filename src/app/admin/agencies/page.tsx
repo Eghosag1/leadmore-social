@@ -14,12 +14,12 @@ export default async function AgenciesPage() {
   const supabase = await createClient();
 
   const { data: agencies } = await supabase.from("agencies").select("*").order("created_at", { ascending: false });
-  const { data: templates } = await supabase.from("agency_templates").select("agency_id, is_active");
+  const { data: templates } = await supabase.from("agency_templates").select("agency_id, status");
   const { data: properties } = await supabase.from("properties").select("agency_id");
 
   const templateCountByAgency = new Map<string, number>();
   for (const t of templates ?? []) {
-    if (t.is_active) templateCountByAgency.set(t.agency_id, (templateCountByAgency.get(t.agency_id) ?? 0) + 1);
+    if (t.status === "published") templateCountByAgency.set(t.agency_id, (templateCountByAgency.get(t.agency_id) ?? 0) + 1);
   }
   const propertyCountByAgency = new Map<string, number>();
   for (const p of properties ?? []) {

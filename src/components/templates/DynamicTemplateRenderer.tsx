@@ -5,9 +5,21 @@ import { compileTemplateSource } from "@/lib/dynamic-template";
 import { RenderImage } from "@/components/render/RenderImage";
 import type { TemplateComponentProps } from "./types";
 
+/**
+ * `data-template-error` marks this as a failure state for screenshotCanvas.ts
+ * (both template validation and real post-rendering) — without it, the
+ * readiness check only looks for "some visible text with a real bounding
+ * box", which this friendly error box satisfies just as well as a correctly
+ * rendered template. A screenshot of this box would otherwise pass validation
+ * silently, or get uploaded as a real (broken-looking) post image.
+ */
 function TemplateErrorDisplay({ message }: { message: string }) {
   return (
-    <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-red-300 bg-red-50 p-4 text-center">
+    <div
+      data-template-error="true"
+      data-template-error-message={message}
+      className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-red-300 bg-red-50 p-4 text-center"
+    >
       <p className="text-sm font-medium text-red-700">Fout in de template</p>
       <p className="text-xs text-red-600">{message}</p>
     </div>

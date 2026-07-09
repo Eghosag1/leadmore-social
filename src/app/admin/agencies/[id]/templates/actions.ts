@@ -4,7 +4,13 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { createAgencyTemplate, setAgencyTemplateActive, updateAgencyTemplate } from "@/services/templates/templateService";
+import {
+  archiveAgencyTemplate,
+  createAgencyTemplate,
+  unarchiveAgencyTemplate,
+  updateAgencyTemplate,
+} from "@/services/templates/templateService";
+import { validateAndPublishTemplate } from "@/services/templates/templateValidationService";
 import type { TemplateConfig } from "@/types/domain";
 
 export interface CreateTemplateState {
@@ -68,10 +74,29 @@ export async function createAgencyTemplateAction(
   redirect(`/admin/agencies/${agencyId}`);
 }
 
-export async function toggleAgencyTemplateActiveAction(agencyId: string, templateId: string, isActive: boolean): Promise<void> {
+export async function archiveAgencyTemplateAction(agencyId: string, templateId: string): Promise<void> {
   await requireRole(["super_admin"]);
-  await setAgencyTemplateActive(templateId, isActive);
+  await archiveAgencyTemplate(templateId);
   revalidatePath(`/admin/agencies/${agencyId}`);
+}
+
+export async function unarchiveAgencyTemplateAction(agencyId: string, templateId: string): Promise<void> {
+  await requireRole(["super_admin"]);
+  await unarchiveAgencyTemplate(templateId);
+  revalidatePath(`/admin/agencies/${agencyId}`);
+}
+
+export interface ValidateTemplateResult {
+  ok: boolean;
+  error?: string;
+}
+
+/** Compiles the template, generates its Tailwind CSS, and test-renders every slide with dummy property data — only on full success does the template become selectable by the agency (see validateAndPublishTemplate). */
+export async function validateAgencyTemplateAction(agencyId: string, templateId: string): Promise<ValidateTemplateResult> {
+  await requireRole(["super_admin"]);
+  const result = await validateAndPublishTemplate(templateId);
+  revalidatePath(`/admin/agencies/${agencyId}`);
+  return result;
 }
 
 export interface UpdateTemplateState {

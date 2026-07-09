@@ -2,7 +2,7 @@
 // the raw database rows (src/types/database.ts) and are what components and
 // server actions actually pass around.
 
-import type { Platform, PostStatus, PropertyStatus, PropertyType } from "./enums";
+import type { Platform, PostStatus, PropertyStatus, PropertyType, TemplateStatus } from "./enums";
 
 /** Branding config shared by every agency template. Extend rather than fork per layout. */
 export interface TemplateBrandConfig {
@@ -130,4 +130,12 @@ export const POST_STATUS_META: Record<PostStatus, PostStatusBadgeMeta> = {
   published: { label: "Gepubliceerd", tone: "success" },
   failed: { label: "Mislukt", tone: "danger" },
   cancelled: { label: "Geannuleerd", tone: "warning" },
+};
+
+export const TEMPLATE_STATUS_META: Record<TemplateStatus, PostStatusBadgeMeta> = {
+  draft: { label: "Concept", tone: "neutral" },
+  testing: { label: "Wordt getest", tone: "info" },
+  published: { label: "Gepubliceerd", tone: "success" },
+  failed: { label: "Mislukt", tone: "danger" },
+  archived: { label: "Gearchiveerd", tone: "neutral" },
 };

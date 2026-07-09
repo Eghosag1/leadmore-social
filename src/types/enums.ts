@@ -7,6 +7,9 @@ export type ProfileRole = (typeof PROFILE_ROLES)[number];
 export const TEMPLATE_TYPES = ["single", "carousel"] as const;
 export type TemplateType = (typeof TEMPLATE_TYPES)[number];
 
+export const TEMPLATE_STATUSES = ["draft", "testing", "published", "failed", "archived"] as const;
+export type TemplateStatus = (typeof TEMPLATE_STATUSES)[number];
+
 export const POST_FORMATS = ["feed", "story"] as const;
 export type PostFormat = (typeof POST_FORMATS)[number];
 

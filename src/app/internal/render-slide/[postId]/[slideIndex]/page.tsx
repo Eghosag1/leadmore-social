@@ -18,6 +18,11 @@ import { verifyRenderToken } from "@/lib/render/token";
  *      and injected directly as a <style> tag, available before any client
  *      JS runs — admin templates are TSX strings in the database, so our
  *      normal build-time Tailwind never sees their classNames otherwise.
+ *      Prefers the template's persisted `compiled_css` (set once by
+ *      templateValidationService when the template was published) over
+ *      recompiling live — only templates that passed validation are ever
+ *      selectable for a real post, so this is normally already populated;
+ *      recompiling here is just a defensive fallback for older data.
  *   2. RenderImage (a plain `<img>`) replaces next/image for this page only
  *      — no lazy-loading/optimization behavior to race against.
  */
@@ -36,7 +41,7 @@ export default async function RenderSlidePage({
   const data = await getSlideRenderData(postId);
   if (!data || !data.componentSource) notFound();
 
-  const compiledCss = await getCompiledCssForTemplate(data.componentSource);
+  const compiledCss = data.compiledCss ?? (await getCompiledCssForTemplate(data.componentSource));
 
   return (
     <>
