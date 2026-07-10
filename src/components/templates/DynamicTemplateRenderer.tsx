@@ -18,7 +18,7 @@ function TemplateErrorDisplay({ message }: { message: string }) {
     <div
       data-template-error="true"
       data-template-error-message={message}
-      className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-red-300 bg-red-50 p-4 text-center"
+      className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-red-300 bg-red-50 p-4 text-center"
     >
       <p className="text-sm font-medium text-red-700">Fout in de template</p>
       <p className="text-xs text-red-600">{message}</p>

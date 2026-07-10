@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DynamicTemplateRenderer } from "@/components/templates/DynamicTemplateRenderer";
+import { ScaledTemplateCanvas } from "@/components/templates/ScaledTemplateCanvas";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { listActiveAgencyTemplatesForCustomer } from "@/services/templates/templateService";
@@ -45,7 +45,7 @@ export default async function TemplatesGalleryPage() {
             });
             return (
               <Card key={template.id} className="overflow-hidden py-0">
-                <DynamicTemplateRenderer source={template.component_source} data={previewData} className="rounded-none shadow-none" />
+                <ScaledTemplateCanvas source={template.component_source} data={previewData} className="rounded-none shadow-none" />
                 <CardContent className="flex flex-col gap-1.5 pb-5 pt-4">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-neutral-900">{template.name}</p>

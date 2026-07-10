@@ -19,7 +19,7 @@ const SINGLE_SOURCE = `function Template({ data, className }) {
       : new Intl.NumberFormat("nl-BE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(price);
 
   return (
-    <div className={["relative aspect-square w-full overflow-hidden rounded-lg bg-neutral-900 text-white shadow-sm", className].filter(Boolean).join(" ")}>
+    <div className={["relative h-full w-full overflow-hidden rounded-lg bg-neutral-900 text-white shadow-sm", className].filter(Boolean).join(" ")}>
       {cover ? (
         <Image src={cover} alt={data.title} fill sizes="600px" className="object-cover" priority />
       ) : (
@@ -81,7 +81,7 @@ const CAROUSEL_SOURCE = `function Template({ data, slideIndex, className }) {
       ? "Prijs op aanvraag"
       : new Intl.NumberFormat("nl-BE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(price);
 
-  const frameClass = ["relative aspect-square w-full overflow-hidden rounded-lg bg-neutral-900 text-white shadow-sm", className]
+  const frameClass = ["relative h-full w-full overflow-hidden rounded-lg bg-neutral-900 text-white shadow-sm", className]
     .filter(Boolean)
     .join(" ");
 
@@ -178,7 +178,7 @@ const SOLD_SOURCE = `function Template({ data, className }) {
   const ribbonText = data.badgeText ?? ribbonByStatus[data.status] ?? "Niet meer beschikbaar";
 
   return (
-    <div className={["relative aspect-square w-full overflow-hidden rounded-lg bg-neutral-900 text-white shadow-sm", className].filter(Boolean).join(" ")}>
+    <div className={["relative h-full w-full overflow-hidden rounded-lg bg-neutral-900 text-white shadow-sm", className].filter(Boolean).join(" ")}>
       {cover ? (
         <Image src={cover} alt={data.title} fill sizes="600px" className="object-cover grayscale-[35%]" priority />
       ) : (

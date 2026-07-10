@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { Globe, MoreHorizontal, ThumbsUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DynamicTemplateRenderer } from "@/components/templates/DynamicTemplateRenderer";
+import { ScaledTemplateCanvas } from "@/components/templates/ScaledTemplateCanvas";
 import { RawImageSlide } from "@/components/templates/RawImageSlide";
 import type { TemplateRenderProps } from "@/types/domain";
 
@@ -49,7 +49,7 @@ export function FacebookPostMock({
 
       <div className="relative w-full">
         {componentSource ? (
-          <DynamicTemplateRenderer source={componentSource} data={data} slideIndex={slideIndex} className="rounded-none shadow-none" />
+          <ScaledTemplateCanvas source={componentSource} data={data} slideIndex={slideIndex} className="rounded-none shadow-none" />
         ) : (
           <RawImageSlide imageUrl={data.images[slideIndex] ?? data.images[0]} className="rounded-none shadow-none" />
         )}

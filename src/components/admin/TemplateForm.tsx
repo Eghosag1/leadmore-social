@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { DynamicTemplateRenderer } from "@/components/templates/DynamicTemplateRenderer";
+import { ScaledTemplateCanvas } from "@/components/templates/ScaledTemplateCanvas";
 import { TEMPLATE_STARTERS } from "@/data/template-starters";
 import { buildTemplateRenderProps } from "@/lib/template-render";
 import { EXAMPLE_PROPERTY, EXAMPLE_PROPERTY_IMAGES } from "@/data/mock/example-property";
@@ -228,7 +228,7 @@ export function TemplateForm({
 
       <div className="lg:sticky lg:top-8 lg:self-start">
         <p className="mb-2 text-xs font-medium text-muted-foreground">Live preview (voorbeeldpand)</p>
-        <DynamicTemplateRenderer source={source} data={previewData} slideIndex={slideIndex} className="shadow-sm" />
+        <ScaledTemplateCanvas source={source} data={previewData} slideIndex={slideIndex} className="shadow-sm" />
         {slideCount > 1 && (
           <input
             type="range"

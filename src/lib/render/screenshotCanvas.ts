@@ -106,7 +106,7 @@ function attachDebugListeners(page: Page, context: string) {
 async function screenshotOnce(url: string, context: string): Promise<Buffer> {
   const browser = await puppeteer.launch({
     args: launchArgs(),
-    defaultViewport: { width: 1080, height: 1080 },
+    defaultViewport: { width: 1080, height: 1350 },
     executablePath: await executablePath(),
     headless: true,
   });

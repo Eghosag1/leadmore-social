@@ -37,7 +37,7 @@ export default async function RenderTemplatePage({
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: compiledCss }} />
-      <div data-render-canvas="true" className="h-[1080px] w-[1080px] overflow-hidden">
+      <div data-render-canvas="true" className="h-[1350px] w-[1080px] overflow-hidden">
         <DynamicTemplateRenderer
           source={data.componentSource}
           data={data.previewData}

@@ -9,7 +9,7 @@ import { verifyRenderToken } from "@/lib/render/token";
  * Chromium instance (server-to-server, no user session — see
  * src/lib/render/token.ts for how it's authorized instead of requireRole()).
  * Shows exactly one slide's DynamicTemplateRenderer output at a fixed
- * 1080x1080 canvas (`data-render-canvas`, what Puppeteer screenshots).
+ * 1080x1350 (4:5) canvas (`data-render-canvas`, what Puppeteer screenshots).
  *
  * Two things make this deterministic, no CDN/DOM-scanning/blind waits
  * needed:
@@ -46,7 +46,7 @@ export default async function RenderSlidePage({
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: compiledCss }} />
-      <div data-render-canvas="true" className="h-[1080px] w-[1080px] overflow-hidden">
+      <div data-render-canvas="true" className="h-[1350px] w-[1080px] overflow-hidden">
         <DynamicTemplateRenderer
           source={data.componentSource}
           data={data.previewData}

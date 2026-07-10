@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { buildTemplateRenderProps } from "@/lib/template-render";
-import { DynamicTemplateRenderer } from "@/components/templates/DynamicTemplateRenderer";
+import { ScaledTemplateCanvas } from "@/components/templates/ScaledTemplateCanvas";
 import { cn } from "@/lib/utils";
 import type { PropertyImageRow, PropertyRow } from "@/types/database";
 import type { TemplateType } from "@/types/enums";
@@ -67,7 +67,7 @@ export function TemplatePreviewClient({
       )}
 
       <div className="max-w-sm">
-        <DynamicTemplateRenderer source={componentSource} data={previewData} slideIndex={slideIndex} className="shadow-sm" />
+        <ScaledTemplateCanvas source={componentSource} data={previewData} slideIndex={slideIndex} className="shadow-sm" />
         {slideCount > 1 && (
           <div className="mt-3 flex justify-center gap-1.5">
             {Array.from({ length: slideCount }, (_, index) => (
