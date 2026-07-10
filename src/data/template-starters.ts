@@ -29,14 +29,14 @@ const SINGLE_SOURCE = `function Template({ data, className }) {
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/40" />
 
       {data.agencyLogo && (
-        <div className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-white shadow-md">
-          <Image src={data.agencyLogo} alt={data.agencyName} width={44} height={44} className="h-full w-full object-cover" />
+        <div className="absolute right-4 top-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white shadow-md">
+          <Image src={data.agencyLogo} alt={data.agencyName} width={64} height={64} className="h-full w-full object-cover" />
         </div>
       )}
 
       {data.badgeText && (
         <span
-          className="absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow"
+          className="absolute left-4 top-4 rounded-full px-3 py-1 text-sm font-semibold uppercase tracking-wide text-white shadow"
           style={{ backgroundColor: data.brandColor }}
         >
           {data.badgeText}
@@ -44,15 +44,15 @@ const SINGLE_SOURCE = `function Template({ data, className }) {
       )}
 
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-5">
-        <div className="flex items-center gap-1.5 text-sm font-medium text-white/85">
+        <div className="flex items-center gap-1.5 text-base font-medium text-white/85">
           <span>📍</span>
           <span className="truncate">{data.location}</span>
         </div>
 
-        <h2 className="text-xl font-semibold leading-snug text-white">{data.title}</h2>
+        <h2 className="text-4xl font-semibold leading-snug text-white">{data.title}</h2>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/90">
-          {data.fields.showPrice && <span className="text-base font-bold text-white">{formatPrice(data.price)}</span>}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-base text-white/90">
+          {data.fields.showPrice && <span className="text-3xl font-bold text-white">{formatPrice(data.price)}</span>}
           {data.fields.showBedrooms && data.bedrooms !== null && <span>🛏 {data.bedrooms}</span>}
           {data.fields.showBathrooms && data.bathrooms !== null && <span>🛁 {data.bathrooms}</span>}
           {data.fields.showSurface && data.surface !== null && <span>📐 {data.surface} m²</span>}
@@ -60,7 +60,7 @@ const SINGLE_SOURCE = `function Template({ data, className }) {
 
         {data.ctaText && (
           <span
-            className="mt-1 inline-flex w-fit items-center rounded-full px-3 py-1.5 text-xs font-semibold text-white"
+            className="mt-1 inline-flex w-fit items-center rounded-full px-3 py-1.5 text-sm font-semibold text-white"
             style={{ backgroundColor: data.brandColor }}
           >
             {data.ctaText}
@@ -96,15 +96,15 @@ const CAROUSEL_SOURCE = `function Template({ data, slideIndex, className }) {
         <div className="flex h-full w-full flex-col justify-center gap-6 p-8" style={{ backgroundColor: data.brandColor }}>
           {data.fields.showPrice && (
             <div>
-              <p className="text-sm font-medium uppercase tracking-wide text-white/70">Vraagprijs</p>
+              <p className="text-base font-medium uppercase tracking-wide text-white/70">Vraagprijs</p>
               <p className="text-3xl font-bold text-white">{formatPrice(data.price)}</p>
             </div>
           )}
           <div className="grid grid-cols-1 gap-3">
             {stats.map(([label, value]) => (
               <div key={label} className="flex items-center gap-3 rounded-lg bg-white/10 px-4 py-3">
-                <span className="text-sm text-white/80">{label}</span>
-                <span className="ml-auto text-base font-semibold text-white">{value}</span>
+                <span className="text-base text-white/80">{label}</span>
+                <span className="ml-auto text-xl font-semibold text-white">{value}</span>
               </div>
             ))}
           </div>
@@ -117,8 +117,8 @@ const CAROUSEL_SOURCE = `function Template({ data, slideIndex, className }) {
     return (
       <div className={frameClass}>
         <div className="flex h-full w-full flex-col justify-center gap-4 p-8" style={{ backgroundColor: data.secondaryColor ?? data.brandColor }}>
-          <p className="text-sm font-medium uppercase tracking-wide text-white/70">Over dit pand</p>
-          <p className="text-lg leading-relaxed text-white">
+          <p className="text-base font-medium uppercase tracking-wide text-white/70">Over dit pand</p>
+          <p className="text-2xl leading-relaxed text-white">
             {data.fields.showDescription ? (data.description ?? "Neem contact op voor meer informatie over dit pand.") : ""}
           </p>
         </div>
@@ -131,12 +131,12 @@ const CAROUSEL_SOURCE = `function Template({ data, slideIndex, className }) {
       <div className={frameClass}>
         <div className="flex h-full w-full flex-col items-center justify-center gap-5 p-8 text-center" style={{ backgroundColor: data.brandColor }}>
           {data.agencyLogo && (
-            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white shadow-md">
-              <Image src={data.agencyLogo} alt={data.agencyName} width={64} height={64} className="h-full w-full object-cover" />
+            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-white shadow-md">
+              <Image src={data.agencyLogo} alt={data.agencyName} width={96} height={96} className="h-full w-full object-cover" />
             </div>
           )}
-          <p className="text-lg font-semibold text-white">{data.agencyName}</p>
-          <p className="text-base text-white/90">{data.ctaText ?? "Neem contact met ons op"}</p>
+          <p className="text-3xl font-semibold text-white">{data.agencyName}</p>
+          <p className="text-xl text-white/90">{data.ctaText ?? "Neem contact met ons op"}</p>
         </div>
       </div>
     );
@@ -152,18 +152,18 @@ const CAROUSEL_SOURCE = `function Template({ data, slideIndex, className }) {
       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-black/30" />
       {data.badgeText && (
         <span
-          className="absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow"
+          className="absolute left-4 top-4 rounded-full px-3 py-1 text-sm font-semibold uppercase tracking-wide text-white shadow"
           style={{ backgroundColor: data.brandColor }}
         >
           {data.badgeText}
         </span>
       )}
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 p-5">
-        <div className="flex items-center gap-1.5 text-sm font-medium text-white/85">
+        <div className="flex items-center gap-1.5 text-base font-medium text-white/85">
           <span>📍</span>
           <span className="truncate">{data.location}</span>
         </div>
-        <h2 className="text-xl font-semibold leading-snug text-white">{data.title}</h2>
+        <h2 className="text-4xl font-semibold leading-snug text-white">{data.title}</h2>
       </div>
     </div>
   );
@@ -189,14 +189,14 @@ const SOLD_SOURCE = `function Template({ data, className }) {
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/30" />
 
       {data.agencyLogo && (
-        <div className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-white shadow-md">
-          <Image src={data.agencyLogo} alt={data.agencyName} width={44} height={44} className="h-full w-full object-cover" />
+        <div className="absolute right-4 top-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-white shadow-md">
+          <Image src={data.agencyLogo} alt={data.agencyName} width={64} height={64} className="h-full w-full object-cover" />
         </div>
       )}
 
       <div className="absolute left-1/2 top-1/2 w-[140%] -translate-x-1/2 -translate-y-1/2 -rotate-[8deg]">
         <div
-          className="flex items-center justify-center py-3 text-center text-2xl font-black uppercase tracking-[0.2em] text-white shadow-lg"
+          className="flex items-center justify-center py-3 text-center text-4xl font-black uppercase tracking-[0.2em] text-white shadow-lg"
           style={{ backgroundColor: data.brandColor }}
         >
           {ribbonText}
@@ -204,14 +204,14 @@ const SOLD_SOURCE = `function Template({ data, className }) {
       </div>
 
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 p-5">
-        <div className="flex items-center gap-1.5 text-sm font-medium text-white/85">
+        <div className="flex items-center gap-1.5 text-base font-medium text-white/85">
           <span>📍</span>
           <span className="truncate">{data.location}</span>
         </div>
-        <h2 className="text-lg font-semibold leading-snug text-white">{data.title}</h2>
+        <h2 className="text-4xl font-semibold leading-snug text-white">{data.title}</h2>
         {data.ctaText && (
           <span
-            className="mt-1 inline-flex w-fit items-center rounded-full px-3 py-1.5 text-xs font-semibold text-white"
+            className="mt-1 inline-flex w-fit items-center rounded-full px-3 py-1.5 text-sm font-semibold text-white"
             style={{ backgroundColor: data.brandColor }}
           >
             {data.ctaText}
