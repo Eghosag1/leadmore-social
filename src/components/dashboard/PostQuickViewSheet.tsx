@@ -100,11 +100,11 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
               <div className="flex gap-3">
                 <div className="flex flex-1 flex-col gap-1.5">
                   <Label htmlFor="scheduledDate">Datum</Label>
-                  <Input id="scheduledDate" name="scheduledDate" type="date" defaultValue={dateValue} required />
+                  <Input key={dateValue} id="scheduledDate" name="scheduledDate" type="date" defaultValue={dateValue} required />
                 </div>
                 <div className="flex flex-1 flex-col gap-1.5">
                   <Label htmlFor="scheduledTime">Uur</Label>
-                  <Input id="scheduledTime" name="scheduledTime" type="time" defaultValue={timeValue} required />
+                  <Input key={timeValue} id="scheduledTime" name="scheduledTime" type="time" defaultValue={timeValue} required />
                 </div>
               </div>
               {state.error && (
