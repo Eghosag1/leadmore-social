@@ -1,6 +1,13 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { MetaPublishingService, MetaRescheduleRequest, MetaSchedulingRequest, MetaSchedulingResult } from "@/types/domain";
+import type {
+  MetaPublishingService,
+  MetaRescheduleRequest,
+  MetaSchedulingRequest,
+  MetaSchedulingResult,
+  MetaStatusCheckRequest,
+  MetaStatusCheckResult,
+} from "@/types/domain";
 
 /**
  * Stands in for the real Meta Graph API. facebookPublishingService and
@@ -43,5 +50,13 @@ export const mockMetaSchedulingService: MetaPublishingService = {
   async reschedule(request: MetaRescheduleRequest): Promise<MetaSchedulingResult> {
     await new Promise((resolve) => setTimeout(resolve, 150));
     return { ok: true, metaObjectId: request.metaObjectId };
+  },
+
+  // No real object to query (Instagram scheduling is still mocked — see
+  // instagramPublishingService.ts) — simulate it having published the
+  // moment its scheduled time passes, same as a real platform would.
+  async checkPublishStatus(request: MetaStatusCheckRequest): Promise<MetaStatusCheckResult> {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return { ok: true, published: Date.now() >= new Date(request.scheduledAt).getTime() };
   },
 };

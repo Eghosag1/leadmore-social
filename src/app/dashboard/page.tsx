@@ -5,11 +5,18 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { PostCalendar, type CalendarPost } from "@/components/dashboard/PostCalendar";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { reconcilePublishedPosts } from "@/services/posts/publishReconciliationService";
 
 export default async function DashboardOverviewPage() {
   const current = await requireRole(["agency_admin", "agency_user"]);
   const agencyId = current.profile.agency_id!;
   const supabase = await createClient();
+
+  // No webhook tells us Meta actually published a scheduled post — reconcile
+  // lazily on read, the moment the calendar is viewed (see
+  // postDetailService.ts for the single-post equivalent).
+  const { data: scheduledCandidates } = await supabase.from("posts").select("id").eq("agency_id", agencyId).eq("status", "scheduled");
+  if (scheduledCandidates?.length) await reconcilePublishedPosts(scheduledCandidates.map((p) => p.id));
 
   const { data: posts } = await supabase
     .from("posts")

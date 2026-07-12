@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/format";
+import { reconcilePublishedPosts } from "@/services/posts/publishReconciliationService";
 import type { Platform, PostStatus } from "@/types/enums";
 
 // lucide-react no longer ships brand marks (trademark reasons), so platforms
@@ -21,6 +22,12 @@ export default async function PostsPage({ searchParams }: { searchParams: Promis
   const current = await requireRole(["agency_admin", "agency_user"]);
   const agencyId = current.profile.agency_id!;
   const supabase = await createClient();
+
+  // No webhook tells us Meta actually published a scheduled post — reconcile
+  // lazily on read, the moment this list is viewed (see postDetailService.ts
+  // for the single-post equivalent).
+  const { data: scheduledCandidates } = await supabase.from("posts").select("id").eq("agency_id", agencyId).eq("status", "scheduled");
+  if (scheduledCandidates?.length) await reconcilePublishedPosts(scheduledCandidates.map((p) => p.id));
 
   const { data: posts } = await supabase
     .from("posts")

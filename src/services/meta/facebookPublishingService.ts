@@ -1,7 +1,14 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { decryptToken } from "@/lib/token-encryption";
-import type { MetaPublishingService, MetaRescheduleRequest, MetaSchedulingRequest, MetaSchedulingResult } from "@/types/domain";
+import type {
+  MetaPublishingService,
+  MetaRescheduleRequest,
+  MetaSchedulingRequest,
+  MetaSchedulingResult,
+  MetaStatusCheckRequest,
+  MetaStatusCheckResult,
+} from "@/types/domain";
 
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -118,5 +125,43 @@ export const facebookPublishingService: MetaPublishingService = {
       caption: request.caption,
       scheduledAt: request.scheduledAt,
     });
+  },
+
+  /**
+   * Confirmed via manual testing: our scheduled objects are Photo nodes
+   * (createScheduledPhotoPost falls back to result.id, since /photos never
+   * returns a post_id for a not-yet-published scheduled upload) — querying
+   * fields like is_published/scheduled_publish_time directly on that id
+   * fails with "(#100) Tried accessing nonexisting field", including after
+   * the post has actually published. The reliable signal instead: Facebook
+   * lists every still-pending scheduled post under
+   * GET /{page-id}/scheduled_posts and removes it from that list the moment
+   * its own scheduler publishes it — so "no longer present there" means
+   * published. See publishReconciliationService.ts for the read-time caller.
+   */
+  async checkPublishStatus(request: MetaStatusCheckRequest): Promise<MetaStatusCheckResult> {
+    const connection = await getPageToken(request.agencyId);
+    if ("error" in connection) return { ok: false, errorMessage: connection.error };
+
+    try {
+      const response = await fetch(
+        `${GRAPH_BASE}/${connection.facebookPageId}/scheduled_posts?access_token=${encodeURIComponent(connection.pageToken)}`,
+      );
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { ok: false, errorMessage: result?.error?.message ?? `Facebook API-fout (${response.status})` };
+      }
+
+      const stillScheduled = ((result.data ?? []) as { id: string }[]).some(
+        (item) => item.id === request.metaObjectId || item.id.endsWith(`_${request.metaObjectId}`),
+      );
+      return { ok: true, published: !stillScheduled };
+    } catch (error) {
+      return {
+        ok: false,
+        errorMessage: error instanceof Error ? error.message : "Onbekende fout bij het opvragen van de publicatiestatus.",
+      };
+    }
   },
 };

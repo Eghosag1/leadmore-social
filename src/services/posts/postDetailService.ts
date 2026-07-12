@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { reconcilePublishedPosts } from "@/services/posts/publishReconciliationService";
 import { buildRawPhotoRenderProps, buildTemplateRenderProps } from "@/lib/template-render";
 import type { PropertyRow } from "@/types/database";
 import type { TemplateConfig, TemplateRenderProps } from "@/types/domain";
@@ -53,6 +54,15 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     await supabase.from("posts").update({ status: "render_failed", render_error: staleError }).eq("id", postId);
     post.status = "render_failed";
     post.render_error = staleError;
+  }
+
+  // Same idea as the stale-render check above: no webhook tells us Meta
+  // actually published a scheduled post, so reconcile lazily on read — see
+  // publishReconciliationService.ts.
+  if (post.status === "scheduled" && post.scheduled_at && new Date(post.scheduled_at).getTime() < Date.now()) {
+    await reconcilePublishedPosts([postId]);
+    const { data: refreshed } = await supabase.from("posts").select("status").eq("id", postId).maybeSingle();
+    if (refreshed) post.status = refreshed.status;
   }
 
   const [{ data: property }, { data: agency }, { data: slides }, { data: jobs }] = await Promise.all([

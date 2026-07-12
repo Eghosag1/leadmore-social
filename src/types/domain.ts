@@ -112,9 +112,26 @@ export interface MetaRescheduleRequest {
   imageUrls: string[];
 }
 
+export interface MetaStatusCheckRequest {
+  agencyId: string;
+  platform: Platform;
+  /** post_jobs.meta_object_id from the original schedule() call. */
+  metaObjectId: string;
+  scheduledAt: string;
+}
+
+export interface MetaStatusCheckResult {
+  /** False means the check itself failed (network/API error) — caller should leave the job untouched and retry later, not treat this as "not published". */
+  ok: boolean;
+  published?: boolean;
+  errorMessage?: string;
+}
+
 export interface MetaPublishingService {
   schedule(request: MetaSchedulingRequest): Promise<MetaSchedulingResult>;
   reschedule(request: MetaRescheduleRequest): Promise<MetaSchedulingResult>;
+  /** Confirms whether Meta actually published a previously-scheduled post — see publishReconciliationService.ts. */
+  checkPublishStatus(request: MetaStatusCheckRequest): Promise<MetaStatusCheckResult>;
 }
 
 export interface PostStatusBadgeMeta {
