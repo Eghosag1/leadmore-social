@@ -14,3 +14,5 @@ export const metaAppId = () => readEnv("META_APP_ID");
 export const metaAppSecret = () => readEnv("META_APP_SECRET");
 export const metaRedirectUri = () => readEnv("META_REDIRECT_URI");
 export const tokenEncryptionKey = () => readEnv("TOKEN_ENCRYPTION_KEY");
+/** Long-lived token for Leadmore's own Business Manager System User — only needed for the Business Portfolio connect path. */
+export const metaSystemUserToken = () => readEnv("META_SYSTEM_USER_TOKEN");

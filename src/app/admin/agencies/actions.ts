@@ -156,6 +156,52 @@ export async function startMetaConnectAction(agencyId: string): Promise<void> {
   redirect(metaAuthService.buildAuthorizationUrl({ agencyId }));
 }
 
+export interface BusinessManagerConnectState {
+  error: string | null;
+}
+
+/**
+ * Alternative to startMetaConnectAction for Pages managed inside a Business
+ * Portfolio — no OAuth redirect, just a direct Graph API lookup using
+ * Leadmore's own System User token. Requires the agency to have already
+ * shared their Page with Leadmore's Business Manager (manual, agency-side
+ * step — see metaAuthService.connectViaBusinessManager).
+ */
+export async function connectAgencyViaBusinessManagerAction(
+  agencyId: string,
+  _prev: BusinessManagerConnectState,
+  formData: FormData,
+): Promise<BusinessManagerConnectState> {
+  await requireRole(["super_admin"]);
+
+  const facebookPageId = String(formData.get("businessManagerPageId") ?? "").trim();
+  if (!facebookPageId) return { error: "Vul een Facebook-pagina ID in." };
+
+  try {
+    const result = await metaAuthService.connectViaBusinessManager(facebookPageId);
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("social_connections")
+      .update({
+        facebook_page_id: result.facebookPageId,
+        instagram_account_id: result.instagramAccountId,
+        access_token_encrypted: encryptToken(result.accessToken),
+        token_expires_at: result.expiresAt,
+        status: "connected",
+      })
+      .eq("agency_id", agencyId)
+      .eq("provider", "meta");
+
+    if (error) return { error: error.message };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Onbekende fout bij het koppelen via Business Manager." };
+  }
+
+  revalidatePath(`/admin/agencies/${agencyId}`);
+  revalidatePath(`/admin/agencies/${agencyId}/settings`);
+  return { error: null };
+}
+
 export interface CrmConnectionFormState {
   error: string | null;
 }

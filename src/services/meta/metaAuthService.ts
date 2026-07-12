@@ -1,5 +1,5 @@
 import "server-only";
-import { metaAppId, metaAppSecret, metaRedirectUri } from "@/lib/meta/env";
+import { metaAppId, metaAppSecret, metaRedirectUri, metaSystemUserToken } from "@/lib/meta/env";
 import { signState } from "@/lib/meta/state";
 
 const GRAPH_VERSION = "v21.0";
@@ -111,6 +111,44 @@ export const metaAuthService = {
       accessToken: page.access_token,
       expiresAt,
       facebookPageId: page.id,
+      instagramAccountId: pageDetails.instagram_business_account?.id ?? null,
+    };
+  },
+
+  /**
+   * Alternative to the personal OAuth flow above, for Pages managed inside a
+   * Business Portfolio (see the CLAUDE.md note on why /me/accounts doesn't
+   * reliably surface those). Requires the agency to have already shared
+   * their Page with Leadmore's Business Manager as a partner (a manual,
+   * agency-side step in Meta Business Settings — there's no API call that
+   * creates that trust relationship, Meta requires human approval on their
+   * side). Once shared, Leadmore's own System User token can fetch a
+   * Page-scoped access token directly, no per-agency consent screen needed.
+   */
+  async connectViaBusinessManager(facebookPageId: string): Promise<MetaTokenExchangeResult> {
+    const pageDetails = await graphFetch<{ access_token?: string; instagram_business_account?: { id: string } }>(
+      `/${facebookPageId}`,
+      {
+        fields: "access_token,instagram_business_account",
+        access_token: metaSystemUserToken(),
+      },
+    );
+
+    if (!pageDetails.access_token) {
+      throw new Error(
+        "Geen toegang tot deze Pagina. Is ze al gedeeld met Leadmore's Business Manager (Business Settings → Pages → Assign Partner)?",
+      );
+    }
+
+    // System User Page tokens don't expire under normal circumstances (same
+    // bookkeeping caveat as the OAuth path above — Meta doesn't return an
+    // explicit expiry here either).
+    const expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+
+    return {
+      accessToken: pageDetails.access_token,
+      expiresAt,
+      facebookPageId,
       instagramAccountId: pageDetails.instagram_business_account?.id ?? null,
     };
   },
