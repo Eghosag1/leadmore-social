@@ -7,6 +7,7 @@ import type { PostStatus } from "@/types/enums";
 // Highest-priority status wins when a property has multiple posts.
 const POST_STATUS_RANK: Record<PostStatus, number> = {
   published: 6,
+  publishing: 5,
   scheduled: 5,
   ready: 4,
   rendered: 4,

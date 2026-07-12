@@ -10,8 +10,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * session — the person clicking through Facebook's dialog isn't necessarily
  * logged into Leadmore Social — so trust comes from the signed `state`
  * param (see src/lib/meta/state.ts), not requireRole(). Writes use the
- * service-role client for the same reason mockMetaSchedulingService does:
- * this models a trusted backend step, not a user-scoped app action.
+ * service-role client because this models a trusted backend step, not a
+ * user-scoped app action (same reasoning as instagramSchedulerSweepService.ts).
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;

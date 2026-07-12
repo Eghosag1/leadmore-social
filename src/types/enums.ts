@@ -23,6 +23,7 @@ export const POST_STATUSES = [
   "ready",
   "rendered",
   "scheduled",
+  "publishing",
   "published",
   "failed",
   "render_failed",

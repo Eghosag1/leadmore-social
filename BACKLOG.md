@@ -40,13 +40,6 @@ gewone OAuth-scherm alsnog betrouwbaar zou laten werken voor zulke pagina's,
 waardoor de partner-stap overbodig wordt. Onbevestigd, niet getest — puur een
 onderzoekspiste.
 
-## Instagram-scheduling
-
-`instagramPublishingService` is nog steeds mock (delegeert naar
-`mockMetaSchedulingService`). Instagram's Content Publishing API kent geen
-`scheduled_publish_time` — vereist een eigen achtergrond-scheduler die op
-`scheduled_at` wacht, geen simpele andere API-call.
-
 ## Template-versiebeheer
 
 Geen versiegeschiedenis/rollback voor admin-templates — een template bewerken
@@ -54,12 +47,17 @@ overschrijft de vorige versie definitief (met automatische terugval naar
 `draft` tot opnieuw gevalideerd, zie Fase 1). Expliciet uit scope gelaten bij
 de eerste versie van de validatieflow.
 
-## Vercel Cron als extra vangnet voor de render-queue
+## Vercel Cron i.p.v. QStash/fire-and-forget, zodra het project naar Pro verhuist
 
-De achtergrond-queue voor renderen (zie CLAUDE.md, "Echte achtergrond-queue
-voor renderen") gebruikt bewust geen Vercel Cron — op het huidige Hobby-plan
-draait een cron-job maximaal 1x per dag, wat renders tot 24u zou kunnen laten
-wachten. In plaats daarvan: een `after()`-getriggerde fire-and-forget request
-plus een lazy vangnet in `postDetailService.ts` (20s-drempel). Zodra het
-project naar een Pro-plan verhuist, kan een echte cron-job (elke minuut) als
-extra vangnet toegevoegd worden bovenop de bestaande request-level check.
+Twee plekken gebruiken vandaag bewust geen Vercel Cron omdat het Hobby-plan
+een cron-job maar 1x/dag toelaat: de render-queue (`after()`-getriggerde
+fire-and-forget request + een lazy vangnet in `postDetailService.ts`,
+20s-drempel) en de Instagram-scheduler (QStash-wake-up-calls naar
+`/api/internal/instagram-sweep`, zie CLAUDE.md "Instagram-scheduling").
+Beide zijn zo ontworpen dat de trigger losstaat van de eigenlijke logica —
+voor de Instagram-sweep in het bijzonder is overstappen naar een Vercel
+Pro-cron (elke minuut) dan ook letterlijk enkel de QStash-aanroep vervangen
+door een `vercel.json`-cron-entry die dezelfde route aanroept, geen enkele
+wijziging aan `instagramSchedulerSweepService.ts` zelf. Voor de render-queue
+zou een Pro-cron een extra vangnet worden bovenop de bestaande
+request-level check, niet een vervanging.

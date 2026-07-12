@@ -31,7 +31,14 @@ async function getPageToken(
     return { error: "Geen actieve Facebook-koppeling voor dit kantoor." };
   }
 
-  return { facebookPageId: connection.facebook_page_id, pageToken: decryptToken(connection.access_token_encrypted) };
+  try {
+    return { facebookPageId: connection.facebook_page_id, pageToken: decryptToken(connection.access_token_encrypted) };
+  } catch {
+    // A malformed/corrupted token must fail just this one lookup, not throw
+    // uncaught — callers like postSchedulerService.publishPost() loop over
+    // multiple platforms/posts, and one bad token shouldn't abort the rest.
+    return { error: "Het opgeslagen Facebook-token kon niet gelezen worden. Koppel opnieuw." };
+  }
 }
 
 async function createScheduledPhotoPost(params: {

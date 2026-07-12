@@ -230,9 +230,17 @@ export interface ReschedulePostResult {
 /**
  * Pushes a caption/time change out to every platform the post was already
  * scheduled on — editing scheduled_at in our own DB alone doesn't move the
- * publish time Meta itself is holding. Only touches jobs that actually have
- * a meta_object_id (i.e. schedulePost() already ran for that platform);
- * still-draft posts have nothing on Meta's side to update yet.
+ * publish time Meta (or, for Instagram, our own QStash wake-up) is holding.
+ *
+ * Skips only jobs with status 'failed' — those never got anywhere on the
+ * first attempt and belong to retryPublish(), not here. Every other job gets
+ * a reschedule() call, *not* just ones with a meta_object_id: that condition
+ * used to gate this loop, which is correct for Facebook (no meta_object_id
+ * there always means "failed") but wrong for Instagram, where a
+ * successfully-scheduled-but-not-yet-published job deliberately has no
+ * meta_object_id yet (see instagramPublishingService.ts) — skipping it here
+ * would silently leave the old QStash wake-up time in place, publishing at
+ * the wrong time instead of the edited one.
  *
  * facebookPublishingService.reschedule() deletes the old scheduled post and
  * creates a fresh one (in-place field updates aren't permitted for our app —
@@ -246,7 +254,7 @@ export async function reschedulePost(input: ReschedulePostInput): Promise<Resche
   const admin = createAdminClient();
 
   const [{ data: jobs }, { data: slides }] = await Promise.all([
-    supabase.from("post_jobs").select("id, platform, meta_object_id").eq("post_id", input.postId),
+    supabase.from("post_jobs").select("id, platform, status, meta_object_id").eq("post_id", input.postId),
     supabase.from("post_slides").select("image_url, rendered_image_url").eq("post_id", input.postId).order("sort_order"),
   ]);
   const imageUrls = (slides ?? []).map((s) => s.rendered_image_url ?? s.image_url);
@@ -255,14 +263,14 @@ export async function reschedulePost(input: ReschedulePostInput): Promise<Resche
   const errors: { platform: Platform; message: string }[] = [];
 
   for (const job of jobs ?? []) {
-    if (!job.meta_object_id) continue;
+    if (job.status === "failed") continue;
 
     const service = PLATFORM_SERVICE[job.platform];
     const result = await service.reschedule(
       {
         agencyId: input.agencyId,
         platform: job.platform,
-        metaObjectId: job.meta_object_id,
+        metaObjectId: job.meta_object_id ?? "",
         caption: input.caption,
         scheduledAt: input.scheduledAt,
         imageUrls,

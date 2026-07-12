@@ -35,6 +35,7 @@ const STATUS_DOT: Record<PostStatus, string> = {
   ready: "bg-blue-400",
   rendered: "bg-blue-400",
   scheduled: "bg-emerald-500",
+  publishing: "bg-blue-400",
   published: "bg-emerald-500",
   failed: "bg-red-500",
   render_failed: "bg-red-500",

@@ -103,6 +103,8 @@ async function seedUsersAndProfiles() {
   }
 }
 
+const MOCK_ACCESS_TOKEN = "mock-encrypted-token";
+
 async function seedCrmAndSocialConnections() {
   console.log("Seeding CRM + Meta connections...");
   for (const agency of MOCK_AGENCIES) {
@@ -114,6 +116,22 @@ async function seedCrmAndSocialConnections() {
       );
     if (crmError) throw new Error(`crm_connections(${agency.slug}): ${crmError.message}`);
 
+    // Never clobber a real Meta connection (set up via the actual OAuth flow
+    // or Business Manager connect) with mock data on a re-seed — only seed
+    // when there's no row yet, or the row is already the mock placeholder
+    // from a previous seed run. A real access_token_encrypted value is a
+    // genuine AES-GCM ciphertext, never literally MOCK_ACCESS_TOKEN.
+    const { data: existing } = await admin
+      .from("social_connections")
+      .select("access_token_encrypted")
+      .eq("agency_id", agency.id)
+      .eq("provider", "meta")
+      .maybeSingle();
+    if (existing && existing.access_token_encrypted !== MOCK_ACCESS_TOKEN) {
+      console.log(`  social_connections(${agency.slug}): real connection detected, leaving it alone.`);
+      continue;
+    }
+
     const { error: socialError } = await admin.from("social_connections").upsert(
       {
         agency_id: agency.id,
@@ -121,7 +139,7 @@ async function seedCrmAndSocialConnections() {
         status: "connected",
         facebook_page_id: `mock_page_${agency.slug}`,
         instagram_account_id: `mock_ig_${agency.slug}`,
-        access_token_encrypted: "mock-encrypted-token",
+        access_token_encrypted: MOCK_ACCESS_TOKEN,
         token_expires_at: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
       },
       { onConflict: "agency_id,provider" },

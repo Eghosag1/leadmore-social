@@ -5,15 +5,21 @@ import { signState } from "@/lib/meta/state";
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
-// Facebook Page scopes only, for now. Instagram permission names have shifted
-// under Meta's newer "Instagram API with Instagram Login" use case
-// (instagram_business_basic / instagram_business_content_publish, alongside
-// the older instagram_basic / instagram_content_publish) — since Instagram
-// publishing isn't built yet (see instagramPublishingService.ts), we don't
-// request any Instagram scope here and avoid depending on naming that may
-// still change before that integration is written. Re-check Meta's current
-// docs for the right scope names when that work starts.
-const SCOPES = ["pages_show_list", "pages_manage_posts", "pages_read_engagement"].join(",");
+// instagram_business_basic / instagram_business_content_publish is the
+// current (2026) permission naming for Instagram publishing via this
+// Facebook-Login-for-Business flow — the older instagram_basic /
+// instagram_content_publish names were deprecated January 27, 2025. Still
+// worth double-checking against the live Meta App Dashboard before
+// submitting App Review (see instagramPublishingService.ts and the
+// CLAUDE.md Instagram section — Meta's docs on this exact naming were hard
+// to pin down with full confidence even at time of writing).
+const SCOPES = [
+  "pages_show_list",
+  "pages_manage_posts",
+  "pages_read_engagement",
+  "instagram_business_basic",
+  "instagram_business_content_publish",
+].join(",");
 
 export interface MetaAuthUrlParams {
   agencyId: string;

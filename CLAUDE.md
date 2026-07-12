@@ -29,11 +29,11 @@ uitdrukkelijk **geen Canva-editor en geen drag-and-drop layout builder**.
 
 - **Wel gebouwd nu:** volledige architectuur, database schema + RLS, beide dashboards, template-rendering via
   React componenten, post-aanmaak- en planningsflow, rolgebaseerde toegang.
-- **Mock, met een echte interface ervoor:** CRM-data (`crmMockService`) en Instagram-scheduling
-  (`instagramPublishingService`, delegeert nog naar `mockMetaSchedulingService`). Facebook-scheduling
-  (`facebookPublishingService`) is intussen **echt** — zie "Meta (Facebook) integratie" onder "Mock services"
-  hieronder. Alles is geschreven achter een interface (`CrmService`, `MetaPublishingService`) zodat een echte
-  integratie er telkens gewoon voor in de plaats komt.
+- **Mock, met een echte interface ervoor:** enkel nog CRM-data (`crmMockService`). Facebook- én
+  Instagram-scheduling (`facebookPublishingService`/`instagramPublishingService`) zijn intussen **echt** — zie
+  "Meta (Facebook + Instagram) integratie" onder "Mock services" hieronder. Alles is geschreven achter een
+  interface (`CrmService`, `MetaPublishingService`) zodat een echte integratie er telkens gewoon voor in de
+  plaats komt.
 - **Rendering:** `renderPost()` gebruikt intussen `browserRenderService` — een **echte** headless-Chromium
   screenshot van de template (zie "Echte beeldcompositie" onder "Mock services" hieronder). `mockRenderService`
   (kale brontfoto teruggeven) blijft in `renderService.ts` staan als lokaal fallback-alternatief, maar wordt niet
@@ -250,19 +250,19 @@ expliciet `createAdminClient()` door omdat er geen sessie is.
 |---|---|---|
 | `crmMockService` (`src/services/crm/`) | Leest `src/data/mock/properties.ts`, `syncAgencyPropertiesFromCrm()` schrijft naar `properties`/`property_images` | Vervang de implementatie van de `CrmService`-interface door een echte provider (Whise, Immoweb, ...); de sync-functie en het datamodel blijven ongewijzigd |
 | `facebookPublishingService` (`src/services/meta/`) | **Echt** — roept de Graph API rechtstreeks aan (zie subsectie hieronder) | Carousel/multi-foto Facebook-posts (`attached_media`) — vandaag wordt enkel de cover-foto gepost, ook voor carousel-posts |
-| `instagramPublishingService` (`src/services/meta/`) | Nog mock, delegeert naar `mockMetaSchedulingService` | Instagram's Content Publishing API publiceert altijd onmiddellijk (`media_publish` kent geen `scheduled_publish_time`) — vereist een eigen achtergrond-scheduler die op `scheduled_at` wacht, niet enkel een andere API-call |
-| `metaAuthService` (`src/services/meta/metaAuthService.ts`) | **Echt** voor de Facebook-kant (authorization URL + volledige token exchange) | Vraagt vandaag enkel Page-scopes aan (`pages_show_list`, `pages_manage_posts`, `pages_read_engagement`) — Instagram-scopes toevoegen zodra die integratie gebouwd wordt; Meta's permissienaamgeving voor Instagram is intussen gewijzigd (`instagram_business_basic`/`instagram_business_content_publish` naast de oudere `instagram_basic`/`instagram_content_publish`), dus best de actuele Meta-documentatie erbij nemen op dat moment |
+| `instagramPublishingService` (`src/services/meta/`) | **Echt** — zie "Instagram-scheduling" hieronder | Carousel/multi-foto Instagram-posts — zelfde beperking als Facebook, enkel `imageUrls[0]` |
+| `metaAuthService` (`src/services/meta/metaAuthService.ts`) | **Echt**, voor zowel Facebook als Instagram (authorization URL + volledige token exchange, inclusief Instagram-scopes) | — |
 | CRM-configuratie | Admin vult `provider`/`config` rechtstreeks in via `CrmConnectionForm` op `/admin/agencies/[id]/settings` | CRM-config-velden worden providerspecifiek zodra een echte CRM-integratie gekozen is |
 
-### Meta (Facebook) integratie — echt, Instagram nog mock
+### Meta (Facebook + Instagram) integratie — beide echt
 
 `super_admin` klikt "Verbind met Facebook" op `/admin/agencies/[id]/settings` (`startMetaConnectAction`,
 `src/app/admin/agencies/actions.ts`) → `metaAuthService.buildAuthorizationUrl()` bouwt de Facebook OAuth-dialoog-URL
 met een HMAC-ondertekende `state`-param (`src/lib/meta/state.ts`) die het `agencyId` vastlegt. Wie het
 toestemmingsscherm doorloopt hoeft **niet** ingelogd te zijn in Leadmore Social — de callback-route
 (`src/app/api/meta/callback/route.ts`, de eerste Route Handler in dit project) vertrouwt op die ondertekende
-`state`, niet op `requireRole()`, en schrijft met de service-role admin-client naar `social_connections` (zelfde
-vertrouwensmodel als `mockMetaSchedulingService`: een trusted backend-stap, geen gebruikersactie).
+`state`, niet op `requireRole()`, en schrijft met de service-role admin-client naar `social_connections` — een
+trusted backend-stap, geen gebruikersactie (zelfde redenering als `instagramSchedulerSweepService.ts`).
 
 `metaAuthService.handleOAuthCallback()` doorloopt de volledige exchange: code → short-lived user token →
 long-lived user token → Page-token via `/me/accounts` → gekoppeld Instagram-account via
@@ -296,14 +296,48 @@ Tokens worden versleuteld opgeslagen (`src/lib/token-encryption.ts`, AES-256-GCM
 in `MetaConnectionForm` gaat nu door `encryptToken()`; het veld toont nooit een opgeslagen token terug (leeg laten
 = huidig token behouden, zie `updateAgencyMetaConnectionAction`). `facebookPublishingService.schedule()` ontsleutelt
 het Page-token en post naar `POST /{page-id}/photos` met `published=false` + `scheduled_publish_time` — Facebook
-plant de post zelf in, er is geen eigen achtergrond-job voor nodig (in tegenstelling tot Instagram, zie de tabel
-hierboven).
+plant de post zelf in, er is geen eigen achtergrond-job voor nodig (in tegenstelling tot Instagram, zie hieronder).
+
+### Instagram-scheduling — echte publicatie via een eigen QStash-scheduler
+
+Instagram's Content Publishing API kent geen `scheduled_publish_time`-equivalent — `media_publish` publiceert
+altijd onmiddellijk. `instagramPublishingService.schedule()` doet daarom **geen** Graph API-call zodra
+`scheduledAt` in de toekomst ligt: enkel de `social_connections`-rij valideren, en een QStash-wake-up-call
+inplannen (`src/lib/qstash.ts`, `scheduleInstagramSweep()` — kale `fetch()` naar QStash's publish-to-URL-endpoint
+met een `Upstash-Not-Before`-header, geen SDK nodig om te versturen). `post_jobs.meta_object_id` blijft bewust
+`null` tot de post écht gepubliceerd is.
+
+Op het afgesproken tijdstip roept QStash `POST /api/internal/instagram-sweep` aan (handtekening geverifieerd via
+het officiële `@upstash/qstash`-`Receiver`-package, niet zelf-gebouwde HMAC-verificatie — JWT-verificatie correct
+herbouwen is foutgevoeliger dan de officiële library gebruiken). Die route roept enkel
+`instagramSchedulerSweepService.publishDueInstagramPosts()` aan, die **alles** publiceert wat op dat moment klaar
+staat (`post_jobs` met `platform='instagram', status='scheduled', scheduled_at <= now()`), niet enkel de ene post
+die de wake-up triggerde — bewust zo ontworpen zodat de route zelf niet weet/kan weten wie hem aanriep of waarom.
+Dat maakt een latere overstap naar een Vercel Pro-cron (elke minuut, i.p.v. QStash) een kwestie van enkel de
+trigger vervangen — de publiceerlogica zelf blijft volledig ongewijzigd.
+
+Per due job: conditioneel geclaimd (`status → 'publishing'`, voorkomt dubbel verwerken bij een race tussen twee
+sweep-aanroepen — zelfde patroon als `postQueueService.processPendingPost`'s render-claim), dan de echte
+twee-staps flow (`POST /{ig-id}/media` → `POST /{ig-id}/media_publish`), dan `post_jobs.status = 'published'` met
+het echte IG-media-id. Waarom **niet** de container meteen bij het inplannen aanmaken: Instagram media-containers
+zijn niet oneindig geldig, en een post die dagen vooruit ingepland wordt zou dan een verlopen container tegenkomen
+op het eigenlijke publicatiemoment.
+
+**Belangrijk gevolg voor "Bewerken" (nieuwe datum/uur)**: `postSchedulerService.reschedulePost()` sloeg vroeger elke
+job zonder `meta_object_id` gewoon over (correct voor Facebook, waar dat altijd "mislukt" betekent) — voor
+Instagram betekent een ontbrekend `meta_object_id` net "succesvol ingepland, nog niet gepubliceerd." De
+skip-conditie is daarom `job.status === 'failed'` geworden, niet `!meta_object_id`; anders zou een nieuw
+datum/uur stilzwijgend genegeerd worden en de post alsnog op het oude tijdstip publiceren.
+
+`checkPublishStatus()` doet voor Instagram geen Meta-call — de sweep is zelf de bron van waarheid, dus
+`post_jobs.status` is al correct op het moment dat `meta_object_id` gezet wordt.
 
 **Nieuwe env-vars** (zie "Lokale setup"): `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`,
-`TOKEN_ENCRYPTION_KEY`, en optioneel `META_SYSTEM_USER_TOKEN` (enkel voor de Business Manager-koppelmethode
-hierboven). Zonder deze vars blijft de app gewoon bouwen/draaien (zelfde lazy-`readEnv()`-patroon als de
-Supabase-vars) — enkel de Meta-koppeling zelf faalt dan met een duidelijke foutmelding i.p.v. een cryptische
-crash.
+`TOKEN_ENCRYPTION_KEY`, optioneel `META_SYSTEM_USER_TOKEN` (enkel voor de Business Manager-koppelmethode
+hierboven), en voor Instagram-scheduling `QSTASH_TOKEN`/`QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`
+(gratis account op upstash.com → QStash). Zonder deze vars blijft de app gewoon bouwen/draaien (zelfde
+lazy-`readEnv()`-patroon als de Supabase-vars) — enkel de betrokken koppeling zelf faalt dan met een duidelijke
+foutmelding i.p.v. een cryptische crash.
 
 Alle mock-vervangingen raken enkel bestanden in `src/services/**` — de rest van de app (pagina's, services die
 ervan afhangen zoals `postSchedulerService`) blijft ongewijzigd omdat alles achter de `CrmService` /
@@ -352,7 +386,8 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
    `compiled_css`/`validated_at`/`validation_error`, voor de Fase 1-validatieflow) →
    `0008_post_lifecycle.sql` (voegt `pending_render` toe aan `post_status` en `posts.platforms`) →
    `0009_property_listing_type.sql` (voegt `properties.listing_type` toe — "te koop" vs. "te huur", los van
-   `property_type`/`status`).
+   `property_type`/`status`) → `0010_instagram_scheduling.sql` (voegt `'publishing'` toe aan `post_status`, de
+   claim-status tijdens de Instagram-sweep).
 3. `npm run seed` — vult het project met demo-kantoren, panden, templates en posts (idempotent, veilig opnieuw te
    draaien).
 4. `npm run dev`.
@@ -363,6 +398,10 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
    van de app gewoon door.
 6. Optioneel, enkel nodig voor de Business Manager-koppelmethode (zie "Tweede koppelmethode" hierboven):
    `META_SYSTEM_USER_TOKEN`, aan te maken via Business Settings → System Users → Generate New Token.
+7. Optioneel, enkel nodig voor echte Instagram-scheduling (zie "Instagram-scheduling" hierboven): gratis account op
+   upstash.com → QStash → `QSTASH_TOKEN` (Publish-tab) en `QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`
+   (Signing Keys-tab). Zonder deze vars blijft Facebook-scheduling gewoon werken; enkel het inplannen van een
+   Instagram-post faalt dan met een duidelijke foutmelding.
 
 **Demo-accounts na het seeden** (wachtwoord `Leadmore123!` voor iedereen, tenzij je `SEED_SUPER_ADMIN_EMAIL`/
 `SEED_SUPER_ADMIN_PASSWORD` in `.env.local` hebt gezet — dat overschrijft enkel het super_admin-account):

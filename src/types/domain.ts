@@ -159,6 +159,7 @@ export const POST_STATUS_META: Record<PostStatus, PostStatusBadgeMeta> = {
   ready: { label: "Klaar", tone: "info" },
   rendered: { label: "Gerenderd", tone: "info" },
   scheduled: { label: "Ingepland", tone: "success" },
+  publishing: { label: "Wordt gepubliceerd", tone: "info" },
   published: { label: "Gepubliceerd", tone: "success" },
   // Legacy value — new posts use render_failed/publish_failed for the same
   // meaning, split by which step actually failed.
