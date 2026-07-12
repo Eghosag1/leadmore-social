@@ -11,22 +11,6 @@ enkel tegen als iemand toevallig het kalenderoverzicht of de posts-lijst bekijkt
 in-app banner, net omdat een banner afhankelijk blijft van dat iemand toevallig
 inlogt. Vereist een mailprovider (Resend/Postmark/...) — nog niet gekozen.
 
-## Tabblad "Mislukt" op de posts-pagina
-
-`/dashboard/scheduled` heeft vandaag 2 tabbladen ("Ingepland"/"Gepubliceerd" —
-zie CLAUDE.md), waarbij `render_failed`/`publish_failed` posts nog gewoon
-onder "Ingepland" vallen. Vraag van het kantoor: een apart derde tabblad
-"Mislukt" met een rood cirkel-badge en het aantal mislukte posts erop, zodat
-je in één oogopslag ziet of er iets misgelopen is zonder de hele
-"Ingepland"-lijst te moeten doorlopen.
-
-## Hover-knop "+ Nieuwe post" op de kalender
-
-Sinds kalenderdagen klikbaar zijn (zie CLAUDE.md, stap 9 van de post-flow)
-weten gebruikers niet noodzakelijk dat dat kán — er is geen visuele hint.
-Vraag: bij hover op een dagkader een "+ Nieuwe post"-knop laten verschijnen,
-zodat de affordance duidelijker is.
-
 ## Facebook-koppeling — model nog eens goed doordenken
 
 Vandaag configureert enkel de platformbeheerder de Meta-koppeling (bewust zo
@@ -42,19 +26,6 @@ Pagina-ID moet invullen. Overwogen om dit naar de kantoorkant (`agency_admin`)
 te verplaatsen, maar voorlopige neiging: **bij de platformbeheerder houden**
 (consistent met CRM-koppeling en templates, die ook nooit door het kantoor
 zelf geconfigureerd worden) — zie de twee concrete vervolgpunten hieronder.
-
-## "Kopieer link"-knop bij de Facebook-koppeling
-
-`startMetaConnectAction` herleidt vandaag de browser van de platformbeheerder
-zelf onmiddellijk naar Facebook's OAuth-scherm (`redirect(...)` in
-`src/app/admin/agencies/actions.ts`) — er is geen manier om de
-autorisatie-link zelf te pakken te krijgen om door te sturen naar iemand bij
-het kantoor, zonder te prutsen met de adresbalk tijdens de redirect. Toe te
-voegen: een tweede, kleine knop naast de bestaande "Verbind met
-Facebook"-knop die de link (`metaAuthService.buildAuthorizationUrl(...)`)
-naar het klembord kopieert in plaats van te redirecten. De link zelf heeft
-geen vervaldatum ingebakken (`signState()` in `src/lib/meta/state.ts` bevat
-geen timestamp) — geen haast nodig om 'm snel te versturen.
 
 ## Uitzoeken of de partner-stap voor Business Portfolio-pagina's te vermijden is
 

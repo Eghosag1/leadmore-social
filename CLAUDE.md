@@ -205,8 +205,9 @@ die elk hun eigen herstelactie hebben: `render_failed` (`RenderFailedActions.tsx
 originele foto gebruiken") en `publish_failed` (`PublishFailedActions.tsx` — enkel "Opnieuw proberen";
 `postSchedulerService.retryPublish()`, nodig omdat `reschedulePost()` enkel jobs met een reeds bestaand
 `meta_object_id` bijwerkt, niet een job die van bij de eerste `schedule()`-poging al geweigerd werd).
-`cancelled` bij annuleren. `/dashboard/scheduled` toont "Ingepland" (alles behalve `published`) en "Gepubliceerd"
-als aparte tabbladen.
+`cancelled` bij annuleren. `/dashboard/scheduled` heeft 3 tabbladen: "Ingepland" (alles behalve `published`/mislukt),
+"Gepubliceerd", en "Mislukt" (`render_failed`/`publish_failed`/legacy `failed`) — dat laatste met een rood
+cirkel-badge met het aantal, zodat mislukte posts opvallen zonder de "Ingepland"-lijst te moeten doorlopen.
 
 RLS-detail: agency-gebruikers mogen `post_jobs` aanmaken (INSERT) wanneer ze plannen, maar **niet** de status
 achteraf wijzigen (UPDATE is `super_admin`/service-role only) — dat simuleert een echte Meta-webhook die de
