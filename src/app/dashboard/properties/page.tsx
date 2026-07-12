@@ -33,7 +33,9 @@ const POST_STATUS_RANK: Record<PostStatus, number> = {
   cancelled: 0,
 };
 
-export default async function PropertiesPage() {
+export default async function PropertiesPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+  const { date } = await searchParams;
+  const safeDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
   const current = await requireRole(["agency_admin", "agency_user"]);
   const agencyId = current.profile.agency_id!;
   const supabase = await createClient();
@@ -120,7 +122,11 @@ export default async function PropertiesPage() {
                     <Button
                       size="sm"
                       nativeButton={false}
-                      render={<Link href={`/dashboard/create-post/${property.id}?returnTo=${encodeURIComponent("/dashboard/properties")}`} />}
+                      render={
+                        <Link
+                          href={`/dashboard/create-post/${property.id}?returnTo=${encodeURIComponent("/dashboard/properties")}${safeDate ? `&date=${safeDate}` : ""}`}
+                        />
+                      }
                     >
                       Post maken
                     </Button>

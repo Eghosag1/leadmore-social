@@ -33,6 +33,7 @@ export function CreatePostForm({
   agencyLogo,
   metaConnected,
   returnTo,
+  initialDate,
 }: {
   property: PropertyRow;
   images: PropertyImageRow[];
@@ -42,6 +43,8 @@ export function CreatePostForm({
   metaConnected: boolean;
   /** Where "Terug" should go — forwarded from the page that linked here (properties list vs. property detail). */
   returnTo?: string;
+  /** Pre-fills the date field — set when this flow started from clicking a day on the calendar. */
+  initialDate?: string;
 }) {
   const availableTypes = useMemo(
     () => [...new Set(templates.map((t) => t.type))] as TemplateType[],
@@ -361,7 +364,7 @@ export function CreatePostForm({
             <CardContent className="flex gap-3">
               <div className="flex flex-1 flex-col gap-1.5">
                 <Label htmlFor="scheduledDate">Datum</Label>
-                <Input id="scheduledDate" name="scheduledDate" type="date" required />
+                <Input id="scheduledDate" name="scheduledDate" type="date" defaultValue={initialDate} required />
               </div>
               <div className="flex flex-1 flex-col gap-1.5">
                 <Label htmlFor="scheduledTime">Uur</Label>

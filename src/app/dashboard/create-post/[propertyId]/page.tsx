@@ -16,12 +16,14 @@ export default async function CreatePostPage({
   searchParams,
 }: {
   params: Promise<{ propertyId: string }>;
-  searchParams: Promise<{ returnTo?: string }>;
+  searchParams: Promise<{ returnTo?: string; date?: string }>;
 }) {
   const { propertyId } = await params;
-  const { returnTo } = await searchParams;
+  const { returnTo, date } = await searchParams;
   // Only ever forward a same-app path — never let an arbitrary query value become a redirect target.
   const safeReturnTo = returnTo?.startsWith("/dashboard") ? returnTo : undefined;
+  // Only ever forward a well-formed yyyy-MM-dd value into a date input's defaultValue.
+  const safeDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
   const current = await requireRole(["agency_admin", "agency_user"]);
   const agencyId = current.profile.agency_id!;
   const supabase = await createClient();
@@ -45,6 +47,7 @@ export default async function CreatePostPage({
       agencyLogo={agency?.logo_url ?? undefined}
       metaConnected={connection?.status === "connected"}
       returnTo={safeReturnTo}
+      initialDate={safeDate}
     />
   );
 }

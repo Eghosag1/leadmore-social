@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   addMonths,
   eachDayOfInterval,
@@ -44,6 +45,7 @@ const STATUS_DOT: Record<PostStatus, string> = {
 const WEEKDAY_LABELS = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
 
 export function PostCalendar({ posts }: { posts: CalendarPost[] }) {
+  const router = useRouter();
   const [month, setMonth] = useState(() => startOfMonth(new Date()));
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
 
@@ -90,7 +92,19 @@ export function PostCalendar({ posts }: { posts: CalendarPost[] }) {
           const dayPosts = postsByDay.get(key) ?? [];
           const inMonth = isSameMonth(day, month);
           return (
-            <div key={key} className={cn("flex min-h-[104px] flex-col gap-1 bg-white p-1.5", !inMonth && "bg-neutral-50/60")}>
+            <div
+              key={key}
+              role="button"
+              tabIndex={0}
+              onClick={() => router.push(`/dashboard/properties?date=${key}`)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") router.push(`/dashboard/properties?date=${key}`);
+              }}
+              className={cn(
+                "flex min-h-[104px] cursor-pointer flex-col gap-1 bg-white p-1.5 hover:bg-neutral-50",
+                !inMonth && "bg-neutral-50/60",
+              )}
+            >
               <span
                 className={cn(
                   "flex h-5 w-5 items-center justify-center rounded-full text-xs",
@@ -104,7 +118,10 @@ export function PostCalendar({ posts }: { posts: CalendarPost[] }) {
                   <button
                     key={post.id}
                     type="button"
-                    onClick={() => setSelectedPostId(post.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPostId(post.id);
+                    }}
                     className="flex items-center gap-1 truncate rounded bg-neutral-50 px-1 py-0.5 text-left text-[11px] text-neutral-700 hover:bg-neutral-100"
                   >
                     <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATUS_DOT[post.status])} />

@@ -10,8 +10,16 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice, formatSurface, propertyStatusLabel, propertyTypeLabel } from "@/lib/format";
 
-export default async function PropertyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PropertyDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ date?: string }>;
+}) {
   const { id } = await params;
+  const { date } = await searchParams;
+  const safeDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined;
   const current = await requireRole(["agency_admin", "agency_user"]);
   const supabase = await createClient();
 
@@ -47,7 +55,11 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
         <Button
           size="lg"
           nativeButton={false}
-          render={<Link href={`/dashboard/create-post/${property.id}?returnTo=${encodeURIComponent(`/dashboard/properties/${property.id}`)}`} />}
+          render={
+            <Link
+              href={`/dashboard/create-post/${property.id}?returnTo=${encodeURIComponent(`/dashboard/properties/${property.id}`)}${safeDate ? `&date=${safeDate}` : ""}`}
+            />
+          }
         >
           Post maken voor dit pand
         </Button>
