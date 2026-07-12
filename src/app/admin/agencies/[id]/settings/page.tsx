@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { AgencyForm } from "@/components/admin/AgencyForm";
 import { MetaConnectionForm } from "@/components/admin/MetaConnectionForm";
+import { CopyMetaLinkButton } from "@/components/admin/CopyMetaLinkButton";
 import { BusinessManagerConnectForm } from "@/components/admin/BusinessManagerConnectForm";
 import { CrmConnectionForm } from "@/components/admin/CrmConnectionForm";
 import { DeleteAgencyButton } from "@/components/admin/DeleteAgencyButton";
@@ -115,12 +116,15 @@ export default async function AgencySettingsPage({
                   </AlertDescription>
                 </Alert>
               )}
-              <form action={boundMetaConnect}>
-                <Button type="submit" size="sm" variant="outline">
-                  <Link2 className="h-3.5 w-3.5" />
-                  Verbind met Facebook
-                </Button>
-              </form>
+              <div className="flex flex-wrap gap-2">
+                <form action={boundMetaConnect}>
+                  <Button type="submit" size="sm" variant="outline">
+                    <Link2 className="h-3.5 w-3.5" />
+                    Verbind met Facebook
+                  </Button>
+                </form>
+                <CopyMetaLinkButton agencyId={agency.id} />
+              </div>
               <BusinessManagerConnectForm action={boundBusinessManagerConnect} />
               <MetaConnectionForm action={boundMetaUpdate} connection={metaConnection ?? null} />
             </CardContent>

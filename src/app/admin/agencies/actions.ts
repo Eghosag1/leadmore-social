@@ -156,6 +156,18 @@ export async function startMetaConnectAction(agencyId: string): Promise<void> {
   redirect(metaAuthService.buildAuthorizationUrl({ agencyId }));
 }
 
+/**
+ * Same authorization URL as startMetaConnectAction, but returned instead of
+ * redirected to — for forwarding to whoever at the agency actually manages
+ * their Facebook Page, instead of the admin completing the consent screen
+ * themselves. The signed state param has no expiry (see src/lib/meta/state.ts),
+ * so the copied link stays valid until it's actually used.
+ */
+export async function getMetaAuthorizationUrlAction(agencyId: string): Promise<string> {
+  await requireRole(["super_admin"]);
+  return metaAuthService.buildAuthorizationUrl({ agencyId });
+}
+
 export interface BusinessManagerConnectState {
   error: string | null;
 }

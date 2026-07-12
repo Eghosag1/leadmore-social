@@ -53,8 +53,10 @@ export default async function PostsPage({ searchParams }: { searchParams: Promis
     jobsByPost.set(job.post_id, [...(jobsByPost.get(job.post_id) ?? []), job]);
   }
 
+  const FAILED_STATUSES: PostStatus[] = ["render_failed", "publish_failed", "failed"];
   const publishedPosts = posts?.filter((p) => p.status === "published") ?? [];
-  const scheduledPosts = posts?.filter((p) => p.status !== "published") ?? [];
+  const failedPosts = posts?.filter((p) => FAILED_STATUSES.includes(p.status)) ?? [];
+  const scheduledPosts = posts?.filter((p) => p.status !== "published" && !FAILED_STATUSES.includes(p.status)) ?? [];
 
   return (
     <div>
@@ -70,12 +72,23 @@ export default async function PostsPage({ searchParams }: { searchParams: Promis
           <TabsList>
             <TabsTrigger value="scheduled">Ingepland ({scheduledPosts.length})</TabsTrigger>
             <TabsTrigger value="published">Gepubliceerd ({publishedPosts.length})</TabsTrigger>
+            <TabsTrigger value="failed" className="gap-1.5">
+              Mislukt
+              {failedPosts.length > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+                  {failedPosts.length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="scheduled">
             <PostsTable posts={scheduledPosts} propertyTitleById={propertyTitleById} jobsByPost={jobsByPost} />
           </TabsContent>
           <TabsContent value="published">
             <PostsTable posts={publishedPosts} propertyTitleById={propertyTitleById} jobsByPost={jobsByPost} />
+          </TabsContent>
+          <TabsContent value="failed">
+            <PostsTable posts={failedPosts} propertyTitleById={propertyTitleById} jobsByPost={jobsByPost} />
           </TabsContent>
         </Tabs>
       )}

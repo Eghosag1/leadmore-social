@@ -15,7 +15,7 @@ import {
   subMonths,
 } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PostQuickViewSheet } from "@/components/dashboard/PostQuickViewSheet";
 import { cn } from "@/lib/utils";
@@ -101,7 +101,7 @@ export function PostCalendar({ posts }: { posts: CalendarPost[] }) {
                 if (e.key === "Enter" || e.key === " ") router.push(`/dashboard/properties?date=${key}`);
               }}
               className={cn(
-                "flex min-h-[104px] cursor-pointer flex-col gap-1 bg-white p-1.5 hover:bg-neutral-50",
+                "group relative flex min-h-[104px] cursor-pointer flex-col gap-1 bg-white p-1.5 hover:bg-neutral-50",
                 !inMonth && "bg-neutral-50/60",
               )}
             >
@@ -130,6 +130,15 @@ export function PostCalendar({ posts }: { posts: CalendarPost[] }) {
                 ))}
                 {dayPosts.length > 3 && <span className="px-1 text-[11px] text-muted-foreground">+{dayPosts.length - 3} meer</span>}
               </div>
+
+              {/* Decorative hint only — the whole cell is already clickable (onClick above), pointer-events-none lets clicks fall through to it. */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-1.5 bottom-1.5 flex items-center justify-center gap-1 rounded bg-neutral-900 px-1.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+              >
+                <Plus className="h-3 w-3" />
+                Nieuwe post
+              </span>
             </div>
           );
         })}
