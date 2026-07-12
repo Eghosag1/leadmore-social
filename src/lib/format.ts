@@ -1,4 +1,4 @@
-import type { PropertyStatus, PropertyType } from "@/types/enums";
+import type { PropertyListingType, PropertyStatus, PropertyType } from "@/types/enums";
 
 const priceFormatter = new Intl.NumberFormat("nl-BE", {
   style: "currency",
@@ -27,6 +27,15 @@ const PROPERTY_TYPE_LABELS: Record<PropertyType, string> = {
 
 export function propertyTypeLabel(type: PropertyType): string {
   return PROPERTY_TYPE_LABELS[type];
+}
+
+const PROPERTY_LISTING_TYPE_LABELS: Record<PropertyListingType, string> = {
+  sale: "Te koop",
+  rent: "Te huur",
+};
+
+export function propertyListingTypeLabel(listingType: PropertyListingType): string {
+  return PROPERTY_LISTING_TYPE_LABELS[listingType];
 }
 
 const PROPERTY_STATUS_LABELS: Record<PropertyStatus, string> = {

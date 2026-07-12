@@ -40,6 +40,9 @@ export type Platform = (typeof PLATFORMS)[number];
 export const PROPERTY_STATUSES = ["available", "under_offer", "sold", "rented", "withdrawn"] as const;
 export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
 
+export const PROPERTY_LISTING_TYPES = ["sale", "rent"] as const;
+export type PropertyListingType = (typeof PROPERTY_LISTING_TYPES)[number];
+
 export const PROPERTY_TYPES = [
   "house",
   "apartment",

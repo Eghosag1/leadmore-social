@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { BackButton } from "@/components/shared/BackButton";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatPrice, formatSurface, propertyStatusLabel, propertyTypeLabel } from "@/lib/format";
+import { formatPrice, formatSurface, propertyListingTypeLabel, propertyStatusLabel, propertyTypeLabel } from "@/lib/format";
 
 export default async function PropertyDetailPage({
   params,
@@ -95,7 +95,10 @@ export default async function PropertyDetailPage({
         <Card className="h-fit">
           <CardContent className="flex flex-col gap-4 pt-6">
             <div className="flex items-center justify-between">
-              <Badge>{propertyStatusLabel(property.status)}</Badge>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline">{propertyListingTypeLabel(property.listing_type)}</Badge>
+                <Badge>{propertyStatusLabel(property.status)}</Badge>
+              </div>
               <span className="text-xs text-muted-foreground">{propertyTypeLabel(property.property_type)}</span>
             </div>
             <p className="text-2xl font-semibold text-neutral-900">{formatPrice(property.price)}</p>

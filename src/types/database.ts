@@ -11,6 +11,7 @@ import type {
   PostStatus,
   PostType,
   ProfileRole,
+  PropertyListingType,
   PropertyStatus,
   PropertyType,
   TemplateStatus,
@@ -72,6 +73,7 @@ export type PropertyRow = {
   price: number;
   location: string;
   property_type: PropertyType;
+  listing_type: PropertyListingType;
   bedrooms: number | null;
   bathrooms: number | null;
   surface: number | null;

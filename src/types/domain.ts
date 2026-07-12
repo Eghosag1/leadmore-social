@@ -3,7 +3,7 @@
 // server actions actually pass around.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Platform, PostStatus, PropertyStatus, PropertyType, TemplateStatus } from "./enums";
+import type { Platform, PostStatus, PropertyListingType, PropertyStatus, PropertyType, TemplateStatus } from "./enums";
 import type { Database } from "./database";
 
 /** Branding config shared by every agency template. Extend rather than fork per layout. */
@@ -71,6 +71,7 @@ export interface CrmProperty {
   price: number;
   location: string;
   propertyType: PropertyType;
+  listingType: PropertyListingType;
   bedrooms: number | null;
   bathrooms: number | null;
   surface: number | null;

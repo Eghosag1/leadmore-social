@@ -156,6 +156,7 @@ async function seedProperties() {
             price: property.price,
             location: property.location,
             property_type: property.propertyType,
+            listing_type: property.listingType,
             bedrooms: property.bedrooms,
             bathrooms: property.bathrooms,
             surface: property.surface,

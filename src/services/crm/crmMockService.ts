@@ -44,6 +44,7 @@ export async function syncAgencyPropertiesFromCrm(agencyId: string): Promise<{ s
           price: property.price,
           location: property.location,
           property_type: property.propertyType,
+          listing_type: property.listingType,
           bedrooms: property.bedrooms,
           bathrooms: property.bathrooms,
           surface: property.surface,

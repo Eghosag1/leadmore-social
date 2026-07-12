@@ -14,6 +14,7 @@ export const EXAMPLE_PROPERTY: PropertyRow = {
   price: 425000,
   location: "Voorbeeldstraat 12, 2000 Antwerpen",
   property_type: "house",
+  listing_type: "sale",
   bedrooms: 4,
   bathrooms: 2,
   surface: 210,
