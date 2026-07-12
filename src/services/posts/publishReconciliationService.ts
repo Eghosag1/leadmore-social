@@ -58,12 +58,15 @@ export async function reconcilePublishedPosts(postIds: string[]): Promise<void> 
     let allChecked = true;
     for (const job of checkableJobs) {
       const service = PLATFORM_SERVICE[job.platform as Platform];
-      const result = await service.checkPublishStatus({
-        agencyId: post.agency_id,
-        platform: job.platform as Platform,
-        metaObjectId: job.meta_object_id!,
-        scheduledAt: job.scheduled_at ?? post.scheduled_at!,
-      });
+      const result = await service.checkPublishStatus(
+        {
+          agencyId: post.agency_id,
+          platform: job.platform as Platform,
+          metaObjectId: job.meta_object_id!,
+          scheduledAt: job.scheduled_at ?? post.scheduled_at!,
+        },
+        supabase,
+      );
 
       if (!result.ok || !result.published) {
         allChecked = false;

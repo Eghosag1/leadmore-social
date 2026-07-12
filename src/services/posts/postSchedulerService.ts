@@ -1,8 +1,10 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { facebookPublishingService } from "@/services/meta/facebookPublishingService";
 import { instagramPublishingService } from "@/services/meta/instagramPublishingService";
+import type { Database } from "@/types/database";
 import type { Platform, PostType } from "@/types/enums";
 
 export interface CreatePostSlideInput {
@@ -86,9 +88,12 @@ const PLATFORM_SERVICE = {
  * Precondition: the post must already be `rendered` — call
  * renderPostForScheduling() (or the explicit "use original photo" override)
  * first. This function doesn't render anything itself.
+ *
+ * `client` is optional, same reasoning as renderPostForScheduling's — the
+ * background queue route has no user session and passes an admin client.
  */
-export async function publishPost(input: PublishPostInput): Promise<PublishPostResult> {
-  const supabase = await createClient();
+export async function publishPost(input: PublishPostInput, client?: SupabaseClient<Database>): Promise<PublishPostResult> {
+  const supabase = client ?? (await createClient());
 
   const { data: post } = await supabase.from("posts").select("platforms").eq("id", input.postId).single();
   const platforms = post?.platforms ?? [];
@@ -109,13 +114,16 @@ export async function publishPost(input: PublishPostInput): Promise<PublishPostR
 
   for (const platform of platforms) {
     const service = PLATFORM_SERVICE[platform];
-    const result = await service.schedule({
-      agencyId: input.agencyId,
-      platform,
-      caption: input.caption,
-      imageUrls,
-      scheduledAt: input.scheduledAt,
-    });
+    const result = await service.schedule(
+      {
+        agencyId: input.agencyId,
+        platform,
+        caption: input.caption,
+        imageUrls,
+        scheduledAt: input.scheduledAt,
+      },
+      supabase,
+    );
 
     const { error: jobError } = await supabase.from("post_jobs").insert({
       post_id: input.postId,
@@ -167,13 +175,16 @@ export async function retryPublish(postId: string, agencyId: string): Promise<Pu
 
   for (const job of failedJobs ?? []) {
     const service = PLATFORM_SERVICE[job.platform];
-    const result = await service.schedule({
-      agencyId,
-      platform: job.platform,
-      caption: post?.caption ?? "",
-      imageUrls,
-      scheduledAt,
-    });
+    const result = await service.schedule(
+      {
+        agencyId,
+        platform: job.platform,
+        caption: post?.caption ?? "",
+        imageUrls,
+        scheduledAt,
+      },
+      supabase,
+    );
 
     await admin
       .from("post_jobs")
@@ -247,14 +258,17 @@ export async function reschedulePost(input: ReschedulePostInput): Promise<Resche
     if (!job.meta_object_id) continue;
 
     const service = PLATFORM_SERVICE[job.platform];
-    const result = await service.reschedule({
-      agencyId: input.agencyId,
-      platform: job.platform,
-      metaObjectId: job.meta_object_id,
-      caption: input.caption,
-      scheduledAt: input.scheduledAt,
-      imageUrls,
-    });
+    const result = await service.reschedule(
+      {
+        agencyId: input.agencyId,
+        platform: job.platform,
+        metaObjectId: job.meta_object_id,
+        caption: input.caption,
+        scheduledAt: input.scheduledAt,
+        imageUrls,
+      },
+      supabase,
+    );
 
     if (!result.ok) {
       failedPlatforms.push(job.platform);

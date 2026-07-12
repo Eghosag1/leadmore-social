@@ -2,14 +2,9 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signRenderToken } from "@/lib/render/token";
 import { screenshotCanvas } from "@/lib/render/screenshotCanvas";
+import { siteUrl } from "@/lib/site-url";
 import { getSlideRenderData } from "@/services/render/renderDataService";
 import type { RenderService, RenderSlideInput, RenderSlideResult } from "./renderService";
-
-function siteUrl(): string {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
 
 /**
  * Real render backend: screenshots the internal render-slide page's canvas

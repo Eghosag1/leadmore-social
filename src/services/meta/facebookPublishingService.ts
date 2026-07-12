@@ -1,4 +1,5 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { decryptToken } from "@/lib/token-encryption";
 import type {
@@ -9,12 +10,16 @@ import type {
   MetaStatusCheckRequest,
   MetaStatusCheckResult,
 } from "@/types/domain";
+import type { Database } from "@/types/database";
 
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
-async function getPageToken(agencyId: string): Promise<{ facebookPageId: string; pageToken: string } | { error: string }> {
-  const supabase = await createClient();
+async function getPageToken(
+  agencyId: string,
+  client?: SupabaseClient<Database>,
+): Promise<{ facebookPageId: string; pageToken: string } | { error: string }> {
+  const supabase = client ?? (await createClient());
   const { data: connection } = await supabase
     .from("social_connections")
     .select("facebook_page_id, access_token_encrypted, status")
@@ -75,8 +80,8 @@ async function createScheduledPhotoPost(params: {
  * for carousel posts exactly like the rest of the app already does.
  */
 export const facebookPublishingService: MetaPublishingService = {
-  async schedule(request: MetaSchedulingRequest): Promise<MetaSchedulingResult> {
-    const connection = await getPageToken(request.agencyId);
+  async schedule(request: MetaSchedulingRequest, client?: SupabaseClient<Database>): Promise<MetaSchedulingResult> {
+    const connection = await getPageToken(request.agencyId, client);
     if ("error" in connection) return { ok: false, errorMessage: connection.error };
 
     const imageUrl = request.imageUrls[0];
@@ -99,8 +104,8 @@ export const facebookPublishingService: MetaPublishingService = {
    * Instead: delete the old scheduled post and create a fresh one, reusing
    * the exact code path that's already confirmed working for schedule().
    */
-  async reschedule(request: MetaRescheduleRequest): Promise<MetaSchedulingResult> {
-    const connection = await getPageToken(request.agencyId);
+  async reschedule(request: MetaRescheduleRequest, client?: SupabaseClient<Database>): Promise<MetaSchedulingResult> {
+    const connection = await getPageToken(request.agencyId, client);
     if ("error" in connection) return { ok: false, errorMessage: connection.error };
 
     const imageUrl = request.imageUrls[0];
@@ -139,8 +144,8 @@ export const facebookPublishingService: MetaPublishingService = {
    * its own scheduler publishes it — so "no longer present there" means
    * published. See publishReconciliationService.ts for the read-time caller.
    */
-  async checkPublishStatus(request: MetaStatusCheckRequest): Promise<MetaStatusCheckResult> {
-    const connection = await getPageToken(request.agencyId);
+  async checkPublishStatus(request: MetaStatusCheckRequest, client?: SupabaseClient<Database>): Promise<MetaStatusCheckResult> {
+    const connection = await getPageToken(request.agencyId, client);
     if ("error" in connection) return { ok: false, errorMessage: connection.error };
 
     try {

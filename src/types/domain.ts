@@ -2,7 +2,9 @@
 // the raw database rows (src/types/database.ts) and are what components and
 // server actions actually pass around.
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Platform, PostStatus, PropertyStatus, PropertyType, TemplateStatus } from "./enums";
+import type { Database } from "./database";
 
 /** Branding config shared by every agency template. Extend rather than fork per layout. */
 export interface TemplateBrandConfig {
@@ -128,10 +130,18 @@ export interface MetaStatusCheckResult {
 }
 
 export interface MetaPublishingService {
-  schedule(request: MetaSchedulingRequest): Promise<MetaSchedulingResult>;
-  reschedule(request: MetaRescheduleRequest): Promise<MetaSchedulingResult>;
+  /**
+   * `client` is optional on every method — omit it for normal session-scoped
+   * callers. The background queue route has no user session (see
+   * postQueueService.ts), so it passes an admin client all the way down to
+   * here, since the social_connections lookup (getPageToken in
+   * facebookPublishingService.ts) needs *some* authorized client to read
+   * with, not just publishPost()'s own reads.
+   */
+  schedule(request: MetaSchedulingRequest, client?: SupabaseClient<Database>): Promise<MetaSchedulingResult>;
+  reschedule(request: MetaRescheduleRequest, client?: SupabaseClient<Database>): Promise<MetaSchedulingResult>;
   /** Confirms whether Meta actually published a previously-scheduled post — see publishReconciliationService.ts. */
-  checkPublishStatus(request: MetaStatusCheckRequest): Promise<MetaStatusCheckResult>;
+  checkPublishStatus(request: MetaStatusCheckRequest, client?: SupabaseClient<Database>): Promise<MetaStatusCheckResult>;
 }
 
 export interface PostStatusBadgeMeta {

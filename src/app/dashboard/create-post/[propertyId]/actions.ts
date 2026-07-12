@@ -1,11 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { createPost, publishPost } from "@/services/posts/postSchedulerService";
-import { renderPostForScheduling } from "@/services/render/renderService";
+import { createPost } from "@/services/posts/postSchedulerService";
 import { parseScheduledAt } from "@/lib/scheduled-time";
+import { signQueueToken } from "@/lib/queue/token";
+import { siteUrl } from "@/lib/site-url";
 import type { Platform, PostType } from "@/types/enums";
 
 export interface CreatePostState {
@@ -116,21 +118,28 @@ export async function createAndSchedulePostAction(
   // persisted) — from here on, failures are the post-detail page's concern
   // to resolve (retry / use original photo / check per-platform errors),
   // not something that should send the user back to a blank form.
-  const renderResult = await renderPostForScheduling(postId);
-  if (!renderResult.ok) {
-    redirect(`/dashboard/posts/${postId}?renderFailed=1`);
-  }
+  //
+  // Rendering + publishing used to happen synchronously right here, which
+  // meant this request had to wait out the full headless-Chromium render
+  // time before it could redirect. Instead: mark the post pending_render and
+  // trigger a separate route (its own function invocation, its own full
+  // time budget — see src/app/api/internal/process-post-queue/route.ts)
+  // via after() so it's guaranteed to actually fire even though redirect()
+  // below unwinds this request immediately — a bare un-awaited fetch() would
+  // race against the serverless function being frozen/torn down right after
+  // the response is sent. If it still never lands, postDetailService.ts's
+  // lazy safety-net picks the post up the next time anyone views it.
+  await supabase.from("posts").update({ status: "pending_render", scheduled_at: scheduledAt.toISOString() }).eq("id", postId);
 
-  const publishResult = await publishPost({
-    postId,
-    agencyId,
-    scheduledAt: scheduledAt.toISOString(),
-    caption: caption || title,
-  });
-
-  if (!publishResult.ok) {
-    redirect(`/dashboard/posts/${postId}?publishFailed=1`);
-  }
+  const token = signQueueToken(postId);
+  const queueUrl = siteUrl();
+  after(() =>
+    fetch(`${queueUrl}/api/internal/process-post-queue`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ postId, token }),
+    }).catch(() => {}),
+  );
 
   redirect("/dashboard/scheduled?created=1");
 }

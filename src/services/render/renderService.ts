@@ -1,6 +1,8 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { browserRenderService } from "./browserRenderService";
+import type { Database } from "@/types/database";
 
 export interface RenderSlideInput {
   postId: string;
@@ -36,19 +38,20 @@ export interface RenderPostResult {
 }
 
 /**
- * Drives a post through rendering -> rendered | render_failed. The
- * `pending_render` status exists in the schema for a future background
- * queue but isn't written here yet — this still runs synchronously within
- * the calling request, so there's no meaningful "queued but not started"
- * window to represent today.
+ * Drives a post through rendering -> rendered | render_failed.
  *
  * Fail-fast: if any slide's render throws, the whole post is render_failed —
  * a carousel with some branded and some unbranded slides would be worse than
  * a clear, complete failure the user can retry or explicitly override (see
  * useOriginalPhotoAction).
+ *
+ * `client` is optional — omit it for the normal session-scoped call sites
+ * (retryRenderAction, useOriginalPhotoAction). The background queue route
+ * (src/app/api/internal/process-post-queue/route.ts) has no user session, so
+ * it passes an explicit admin client instead — see postQueueService.ts.
  */
-export async function renderPostForScheduling(postId: string): Promise<RenderPostResult> {
-  const supabase = await createClient();
+export async function renderPostForScheduling(postId: string, client?: SupabaseClient<Database>): Promise<RenderPostResult> {
+  const supabase = client ?? (await createClient());
 
   await supabase.from("posts").update({ status: "rendering" }).eq("id", postId);
 

@@ -4,12 +4,7 @@ import { compileTemplateSource } from "@/lib/dynamic-template";
 import { getCompiledCssForTemplate, hashTemplateSource } from "@/lib/render/compile-tailwind";
 import { signRenderToken } from "@/lib/render/token";
 import { screenshotCanvas } from "@/lib/render/screenshotCanvas";
-
-function siteUrl(): string {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
+import { siteUrl } from "@/lib/site-url";
 
 export interface TemplateValidationResult {
   ok: boolean;

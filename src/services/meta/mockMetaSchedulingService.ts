@@ -1,4 +1,5 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type {
   MetaPublishingService,
@@ -8,6 +9,7 @@ import type {
   MetaStatusCheckRequest,
   MetaStatusCheckResult,
 } from "@/types/domain";
+import type { Database } from "@/types/database";
 
 /**
  * Stands in for the real Meta Graph API. facebookPublishingService and
@@ -17,8 +19,8 @@ import type {
  * because everything is written against the MetaPublishingService interface.
  */
 export const mockMetaSchedulingService: MetaPublishingService = {
-  async schedule(request: MetaSchedulingRequest): Promise<MetaSchedulingResult> {
-    const supabase = await createClient();
+  async schedule(request: MetaSchedulingRequest, client?: SupabaseClient<Database>): Promise<MetaSchedulingResult> {
+    const supabase = client ?? (await createClient());
     const { data: connection } = await supabase
       .from("social_connections")
       .select("status, facebook_page_id, instagram_account_id")

@@ -9,7 +9,9 @@ export function PostCreatedToast() {
   const router = useRouter();
 
   useEffect(() => {
-    toast.success("Post ingepland!", { description: "U vindt de post hieronder terug in de lijst." });
+    toast.success("Post wordt aangemaakt!", {
+      description: "Renderen en inplannen bij Meta gebeurt nu op de achtergrond — dit duurt meestal maar enkele seconden.",
+    });
     router.replace("/dashboard/scheduled");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

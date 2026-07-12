@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { reconcilePublishedPosts } from "@/services/posts/publishReconciliationService";
+import { processPendingPost } from "@/services/posts/postQueueService";
 import { buildRawPhotoRenderProps, buildTemplateRenderProps } from "@/lib/template-render";
 import type { PropertyRow } from "@/types/database";
 import type { TemplateConfig, TemplateRenderProps } from "@/types/domain";
@@ -34,6 +35,12 @@ export interface PostDetailData {
 // screenshotCanvas.ts).
 const STALE_RENDERING_THRESHOLD_MS = 3 * 60 * 1000;
 
+// How long a post can plausibly sit on 'pending_render' before the
+// fire-and-forget queue trigger (createAndSchedulePostAction, via after())
+// probably didn't land — normally resolves within single-digit seconds, so
+// this is a generous safety margin, not a normal wait.
+const STALE_PENDING_RENDER_THRESHOLD_MS = 20 * 1000;
+
 /**
  * Assembles everything a post detail view needs (full page or quick-view
  * sheet) — same shape either way so both surfaces stay in sync. Returns null
@@ -54,6 +61,19 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     await supabase.from("posts").update({ status: "render_failed", render_error: staleError }).eq("id", postId);
     post.status = "render_failed";
     post.render_error = staleError;
+  }
+
+  // Safety net for the fire-and-forget queue trigger in
+  // createAndSchedulePostAction — if that request never landed, this is what
+  // actually gets the post render+published, using the ordinary session
+  // client (RLS already allows an agency member to update their own posts
+  // and insert post_jobs, exactly like the old synchronous flow did). Not
+  // added to the list/calendar pages on purpose — those shouldn't trigger
+  // heavy render work just from being viewed, see BACKLOG.md reasoning.
+  if (post.status === "pending_render" && Date.now() - new Date(post.updated_at).getTime() > STALE_PENDING_RENDER_THRESHOLD_MS) {
+    await processPendingPost(postId, supabase);
+    const { data: refreshed } = await supabase.from("posts").select("*").eq("id", postId).maybeSingle();
+    if (refreshed) Object.assign(post, refreshed);
   }
 
   // Same idea as the stale-render check above: no webhook tells us Meta
