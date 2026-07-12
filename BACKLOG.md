@@ -11,6 +11,40 @@ enkel tegen als iemand toevallig het kalenderoverzicht of de posts-lijst bekijkt
 in-app banner, net omdat een banner afhankelijk blijft van dat iemand toevallig
 inlogt. Vereist een mailprovider (Resend/Postmark/...) — nog niet gekozen.
 
+## Tabblad "Mislukt" op de posts-pagina
+
+`/dashboard/scheduled` heeft vandaag 2 tabbladen ("Ingepland"/"Gepubliceerd" —
+zie CLAUDE.md), waarbij `render_failed`/`publish_failed` posts nog gewoon
+onder "Ingepland" vallen. Vraag van het kantoor: een apart derde tabblad
+"Mislukt" met een rood cirkel-badge en het aantal mislukte posts erop, zodat
+je in één oogopslag ziet of er iets misgelopen is zonder de hele
+"Ingepland"-lijst te moeten doorlopen.
+
+## Hover-knop "+ Nieuwe post" op de kalender
+
+Sinds kalenderdagen klikbaar zijn (zie CLAUDE.md, stap 9 van de post-flow)
+weten gebruikers niet noodzakelijk dat dat kán — er is geen visuele hint.
+Vraag: bij hover op een dagkader een "+ Nieuwe post"-knop laten verschijnen,
+zodat de affordance duidelijker is.
+
+## Facebook-koppeling — model nog eens goed doordenken
+
+Vandaag configureert enkel de platformbeheerder de Meta-koppeling (bewust zo
+ontworpen, zie CLAUDE.md "Rollen en permissies" — agency-gebruikers mogen dit
+nooit zelf instellen, RLS staat enkel super_admin schrijftoegang toe op
+`social_connections`). In de praktijk verloopt het koppelen zo: de
+platformbeheerder genereert de OAuth-link en stuurt die door naar iemand bij
+het kantoor die beheerder is van hun eigen Facebook-pagina (die persoon heeft
+zelf geen Leadmore-account nodig); voor pagina's binnen een Business
+Portfolio deelt het kantoor in plaats daarvan hun Pagina met Leadmore's
+Business Manager als partner, waarna de platformbeheerder enkel het
+Pagina-ID moet invullen. Vraag van het kantoor of dit huidige model (koppeling
+blijft volledig bij de platformbeheerder, kantoor doet enkel de
+Facebook-kant-actie) wel de juiste keuze is op langere termijn, of dat er toch
+meer eigenaarschap/zichtbaarheid bij het kantoor zelf moet komen — nog geen
+beslissing over genomen, bewust even laten bezinken voor we hier iets aan
+bouwen.
+
 ## Instagram-scheduling
 
 `instagramPublishingService` is nog steeds mock (delegeert naar
