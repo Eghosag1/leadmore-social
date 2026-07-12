@@ -348,7 +348,11 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
    `social_connections`-rechten tot super_admin-only) → `0005_dynamic_templates.sql` (schrapt `layout_key` en de
    `layout_key`-domain, voegt `component_source`/`slide_count` toe aan `agency_templates`) →
    `0006_optional_template_posts.sql` (maakt `posts.agency_template_id` optioneel, voor "eigen foto's"-posts zonder
-   template).
+   template) → `0007_template_validation.sql` (vervangt `is_active` door een `template_status`-enum plus
+   `compiled_css`/`validated_at`/`validation_error`, voor de Fase 1-validatieflow) →
+   `0008_post_lifecycle.sql` (voegt `pending_render` toe aan `post_status` en `posts.platforms`) →
+   `0009_property_listing_type.sql` (voegt `properties.listing_type` toe — "te koop" vs. "te huur", los van
+   `property_type`/`status`).
 3. `npm run seed` — vult het project met demo-kantoren, panden, templates en posts (idempotent, veilig opnieuw te
    draaien).
 4. `npm run dev`.
