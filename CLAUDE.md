@@ -1,5 +1,21 @@
 @AGENTS.md
 
+# Taal
+
+Antwoord altijd in het Nederlands.
+
+Gebruik Nederlands voor:
+- uitleg
+- vragen
+- samenvattingen
+- plannen
+- foutmeldingen
+- opmerkingen over uitgevoerde wijzigingen
+
+Behoud Engelse termen wanneer dat gebruikelijk of technisch noodzakelijk is, zoals functienamen, variabelen, bestandsnamen, commando's en code.
+
+Schrijf code en codecommentaar in het Engels, tenzij ik expliciet anders vraag.
+
 # Leadmore Social — SaaS MVP voor vastgoedkantoren
 
 ## Productvisie
