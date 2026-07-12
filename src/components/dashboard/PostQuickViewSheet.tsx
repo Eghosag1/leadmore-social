@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PhonePreview } from "@/components/dashboard/PhonePreview";
 import { CancelPostButton } from "@/components/dashboard/CancelPostButton";
 import { RenderFailedActions } from "@/components/dashboard/RenderFailedActions";
+import { PublishFailedActions } from "@/components/dashboard/PublishFailedActions";
 import { FieldBindingControl } from "@/components/dashboard/FieldBindingControl";
 import { PostStatusBadge } from "@/components/shared/StatusBadge";
 import { formatDateInputs } from "@/lib/date-inputs";
@@ -75,6 +76,7 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
       </div>
 
       {data.status === "render_failed" && <RenderFailedActions postId={data.postId} renderError={data.renderError} />}
+      {data.status === "publish_failed" && <PublishFailedActions postId={data.postId} jobs={data.jobs} />}
       {data.status !== "render_failed" && data.renderOverridden && (
         <Alert>
           <AlertDescription>

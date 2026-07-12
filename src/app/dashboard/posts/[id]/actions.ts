@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { cancelPost, publishPost, reschedulePost } from "@/services/posts/postSchedulerService";
+import { cancelPost, publishPost, reschedulePost, retryPublish } from "@/services/posts/postSchedulerService";
 import { renderPostForScheduling } from "@/services/render/renderService";
 import { getPostDetailData, type PostDetailData } from "@/services/posts/postDetailService";
 import { parseScheduledAt } from "@/lib/scheduled-time";
@@ -190,4 +190,21 @@ export async function useOriginalPhotoAction(postId: string): Promise<RenderReco
   revalidatePath("/dashboard/scheduled");
   revalidatePath("/dashboard");
   return publishResult.ok ? { ok: true } : { ok: false, error: "Inplannen bij Meta mislukte." };
+}
+
+/** "Opnieuw proberen" for a publish_failed post — see retryPublish() for why this can't reuse reschedulePost(). */
+export async function retryPublishAction(postId: string): Promise<RenderRecoveryResult> {
+  const current = await requireRole(["agency_admin", "agency_user"]);
+  const agencyId = current.profile.agency_id!;
+  const supabase = await createClient();
+
+  const { data: post } = await supabase.from("posts").select("id").eq("id", postId).eq("agency_id", agencyId).maybeSingle();
+  if (!post) return { ok: false, error: "Post niet gevonden." };
+
+  const result = await retryPublish(postId, agencyId);
+
+  revalidatePath(`/dashboard/posts/${postId}`);
+  revalidatePath("/dashboard/scheduled");
+  revalidatePath("/dashboard");
+  return result.ok ? { ok: true } : { ok: false, error: "Inplannen bij Meta mislukte opnieuw." };
 }

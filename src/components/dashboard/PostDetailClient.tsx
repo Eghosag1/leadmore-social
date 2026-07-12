@@ -11,6 +11,7 @@ import { PhonePreview } from "@/components/dashboard/PhonePreview";
 import { CancelPostButton } from "@/components/dashboard/CancelPostButton";
 import { DownloadImageButton } from "@/components/dashboard/DownloadImageButton";
 import { RenderFailedActions } from "@/components/dashboard/RenderFailedActions";
+import { PublishFailedActions } from "@/components/dashboard/PublishFailedActions";
 import { FieldBindingControl } from "@/components/dashboard/FieldBindingControl";
 import { PostStatusBadge } from "@/components/shared/StatusBadge";
 import { MANUAL_SOURCE, resolvePropertyField, type FieldSourceValue } from "@/lib/field-binding";
@@ -84,6 +85,7 @@ export function PostDetailClient({
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="flex flex-col gap-6">
         {status === "render_failed" && <RenderFailedActions postId={postId} renderError={renderError} />}
+        {status === "publish_failed" && <PublishFailedActions postId={postId} jobs={jobs} />}
         {status !== "render_failed" && renderOverridden && (
           <Alert>
             <AlertDescription>
