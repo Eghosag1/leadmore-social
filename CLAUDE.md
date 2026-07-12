@@ -192,21 +192,56 @@ Flow (`src/components/dashboard/CreatePostForm.tsx` → `src/app/dashboard/creat
    `null` (eigen foto's) renderen die mocks `RawImageSlide` (`src/components/templates/RawImageSlide.tsx`) in
    plaats van `DynamicTemplateRenderer`.
 8. Kiest Facebook en/of Instagram.
-9. Kiest datum/uur.
+9. Kiest datum/uur — of vertrekt vanaf een klik op een dag in het kalenderoverzicht (`/dashboard`,
+   `PostCalendar.tsx`), die dan al voorgeselecteerd staat (via `?date=` doorgegeven t/m de pandkeuze).
 10. `postSchedulerService.createPost()` — maakt `posts` (status `draft`, `agency_template_id` null bij eigen
     foto's) + `post_slides` aan (1 slide per gekozen foto).
-11. `postSchedulerService.schedulePost()` — rendert (`renderService`, status `rendering` → `ready`), zet
-    `posts.status = 'scheduled'`, en maakt per gekozen platform een `post_jobs`-rij aan via
-    `facebookPublishingService` / `instagramPublishingService` (die vandaag beide naar
-    `mockMetaSchedulingService` verwijzen). Na een geslaagde redirect naar `/dashboard/scheduled?created=1` toont
-    `PostCreatedToast` een bevestigingsmelding (sonner) en strip de query param meteen weer.
+11. `createAndSchedulePostAction` zet `posts.status = 'pending_render'` + `scheduled_at`, en redirect meteen naar
+    `/dashboard/scheduled?created=1` (`PostCreatedToast` toont een "wordt verwerkt"-melding) — het eigenlijke
+    renderen/publiceren gebeurt niet meer in dezelfde request (zie "Achtergrond-queue voor renderen" hieronder).
 
-**Statusflow:** `draft → rendering → ready → scheduled → published`, of `failed` (met `error_message` op de
-`post_jobs`-rij) als het schedulen mislukt (bv. geen actieve Meta-koppeling). `cancelled` bij annuleren.
+**Statusflow:** `draft → pending_render → rendering → rendered → scheduled → published`, met twee foutstatussen
+die elk hun eigen herstelactie hebben: `render_failed` (`RenderFailedActions.tsx` — "Opnieuw proberen" of "Toch
+originele foto gebruiken") en `publish_failed` (`PublishFailedActions.tsx` — enkel "Opnieuw proberen";
+`postSchedulerService.retryPublish()`, nodig omdat `reschedulePost()` enkel jobs met een reeds bestaand
+`meta_object_id` bijwerkt, niet een job die van bij de eerste `schedule()`-poging al geweigerd werd).
+`cancelled` bij annuleren. `/dashboard/scheduled` toont "Ingepland" (alles behalve `published`) en "Gepubliceerd"
+als aparte tabbladen.
 
 RLS-detail: agency-gebruikers mogen `post_jobs` aanmaken (INSERT) wanneer ze plannen, maar **niet** de status
 achteraf wijzigen (UPDATE is `super_admin`/service-role only) — dat simuleert een echte Meta-webhook die de
-publicatiestatus later bijwerkt, niet de browser-sessie van de gebruiker.
+publicatiestatus later bijwerkt, niet de browser-sessie van de gebruiker. Concreet raakt dit elke functie in
+`postSchedulerService.ts` die een bestaande `post_jobs`-rij update (`retryPublish`, `reschedulePost`): die
+gebruiken daarvoor expliciet `createAdminClient()`, niet de sessie-client — anders faalt de update stil (geen
+error, gewoon 0 rijen geraakt), wat tijdens het bouwen van `retryPublish` ook echt zo gebeurde.
+
+### Achtergrond-queue voor renderen
+
+Renderen (headless-Chromium screenshot, zie "Echte beeldcompositie" hieronder) gebeurt niet meer synchroon binnen
+`createAndSchedulePostAction`'s request. Reden: het project draait op **Vercel Hobby**, waar cron-jobs maximaal
+1x per dag mogen draaien — een cron-gebaseerde queue zou renders tot 24u kunnen laten wachten, dus geen optie.
+In plaats daarvan:
+
+1. De post-aanmaak-action zet `posts.status = 'pending_render'` en triggert via `after()` (`next/server`) een
+   niet-afgewachte `fetch()` naar `src/app/api/internal/process-post-queue/route.ts` — draait daardoor in een
+   **eigen serverless functie-instantie** met een eigen volledig tijdsbudget, terwijl de aanmaak-request meteen
+   kan redirecten. `after()` is bewust gebruikt i.p.v. een kale `void fetch(...)`: die laatste raakt in een
+   servomgeving een race tegen de functie die net na de `redirect()` bevriest/afgesloten wordt vóór de fetch
+   effectief vertrekt.
+2. Die route is geautoriseerd met een HMAC-token (`src/lib/queue/token.ts`, zelfde patroon als
+   `src/lib/render/token.ts`) — server-to-server, geen gebruikerssessie.
+3. `src/services/posts/postQueueService.ts` (`processPendingPost`) doet het eigenlijke werk: claimt de post met
+   een conditionele update (`status='rendering' WHERE status='pending_render'`, voorkomt dubbel verwerken bij een
+   race), rendert (`renderPostForScheduling`), en publiceert bij succes (`publishPost`).
+4. **Veiligheidsnet**, geen cron: `postDetailService.ts` reconciliet lazily — als een post nog >20s op
+   `pending_render` staat wanneer de detailpagina bekeken wordt (fire-and-forget-trigger nooit aangekomen), roept
+   die pagina zelf `processPendingPost` aan met de gewone sessie-client. Bewust **niet** toegevoegd aan de
+   lijst-/kalenderpagina's — die mogen niet enkel door bekeken te worden al zwaar renderwerk starten.
+
+`renderPostForScheduling()` en `publishPost()` (en de `MetaPublishingService`-interface-methodes
+`schedule`/`reschedule`/`checkPublishStatus`) accepteren daarom een **optionele** Supabase-client-parameter: de
+gewone aanroepen (retry-acties, UI-flows) laten hem weg (valt terug op de sessie-client), de queue-route geeft
+expliciet `createAdminClient()` door omdat er geen sessie is.
 
 ## Mock services → toekomstige echte integraties
 
@@ -241,7 +276,7 @@ vereist dit Business Verification of een correcte taak-toewijzing op Pagina-nive
 Business Manager. Relevant om vooraf te weten bij het onboarden van kantoren: hun Pagina kan in de praktijk
 onder een Business Portfolio vallen.
 
-### Tweede koppelmethode: Business Manager / System User (branch `feature/business-manager-connect`, nog niet op main)
+### Tweede koppelmethode: Business Manager / System User
 
 Voor Pagina's binnen een Business Portfolio, als alternatief voor de personal-OAuth-flow hierboven:
 `metaAuthService.connectViaBusinessManager(facebookPageId)` gebruikt Leadmore's eigen **System User**-token
@@ -264,17 +299,18 @@ plant de post zelf in, er is geen eigen achtergrond-job voor nodig (in tegenstel
 hierboven).
 
 **Nieuwe env-vars** (zie "Lokale setup"): `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`,
-`TOKEN_ENCRYPTION_KEY`. Zonder deze vars blijft de app gewoon bouwen/draaien (zelfde lazy-`readEnv()`-patroon als
-de Supabase-vars) — enkel de Meta-koppeling zelf faalt dan met een duidelijke foutmelding i.p.v. een cryptische
+`TOKEN_ENCRYPTION_KEY`, en optioneel `META_SYSTEM_USER_TOKEN` (enkel voor de Business Manager-koppelmethode
+hierboven). Zonder deze vars blijft de app gewoon bouwen/draaien (zelfde lazy-`readEnv()`-patroon als de
+Supabase-vars) — enkel de Meta-koppeling zelf faalt dan met een duidelijke foutmelding i.p.v. een cryptische
 crash.
 
 Alle mock-vervangingen raken enkel bestanden in `src/services/**` — de rest van de app (pagina's, services die
 ervan afhangen zoals `postSchedulerService`) blijft ongewijzigd omdat alles achter de `CrmService` /
 `MetaPublishingService` interfaces (`src/types/domain.ts`) is geschreven.
 
-### Echte beeldcompositie (branch `feature/real-image-rendering`, nog niet op main)
+### Echte beeldcompositie
 
-`renderPost()` (`src/services/render/renderService.ts`) roept nu `browserRenderService` aan i.p.v. de mock: voor
+`renderPostForScheduling()` (`src/services/render/renderService.ts`) roept nu `browserRenderService` aan i.p.v. de mock: voor
 elke slide van een post mét template wordt een headless Chromium-instantie (`puppeteer-core` +
 `@sparticuz/chromium`, de Vercel/Lambda-compatibele combinatie) naar een **interne, ongeauthenticeerde pagina**
 gestuurd (`src/app/internal/render-slide/[postId]/[slideIndex]/page.tsx`) die exact `DynamicTemplateRenderer`
@@ -285,11 +321,11 @@ admin-template is met Tailwind geschreven (vast schrijfcontract, zie hierboven).
 Autorisatie voor die interne pagina loopt niet via `requireRole()` (Puppeteer benadert 'm server-naar-server,
 geen gebruikerssessie) maar via een HMAC-ondertekend `?token=` (`src/lib/render/token.ts`, zelfde patroon als de
 Meta OAuth `state`-param). De screenshot wordt geüpload naar de al bestaande `rendered-posts`-bucket
-(`0002_storage.sql`) en die URL komt in `post_slides.rendered_image_url` — `schedulePost()`/`reschedulePost()`
+(`0002_storage.sql`) en die URL komt in `post_slides.rendered_image_url` — `publishPost()`/`reschedulePost()`
 gebruiken die kolom (met fallback op `image_url`) voor de Meta-publish-call i.p.v. de kale brontfoto.
 
 **Betrouwbaarheid**: tot 3 renderpogingen met backoff bij een mislukking, en als het na alle pogingen nog steeds
-faalt, valt de pipeline terug op de brontfoto in plaats van `schedulePost()` te laten crashen — een mislukte
+faalt, valt de pipeline terug op de brontfoto in plaats van `publishPost()` te laten crashen — een mislukte
 render mag nooit een post blokkeren. Die fallback is wel zichtbaar: `hasRenderFallback`
 (`src/services/posts/postDetailService.ts`, gedetecteerd via `rendered_image_url === image_url` op een slide van
 een post mét template) toont een waarschuwing op de post-detailpagina i.p.v. stilzwijgend een ongebrande post de
@@ -320,9 +356,8 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
    `http://localhost:3000/api/meta/callback`, moet exact overeenkomen met wat in het Meta-dashboard geregistreerd
    staat), en `TOKEN_ENCRYPTION_KEY` (zelf te genereren met `openssl rand -hex 32`). Zonder deze vars werkt de rest
    van de app gewoon door.
-6. Optioneel, enkel nodig voor de Business Manager-koppelmethode (zie "Tweede koppelmethode" hierboven, branch
-   `feature/business-manager-connect`): `META_SYSTEM_USER_TOKEN`, aan te maken via Business Settings → System
-   Users → Generate New Token.
+6. Optioneel, enkel nodig voor de Business Manager-koppelmethode (zie "Tweede koppelmethode" hierboven):
+   `META_SYSTEM_USER_TOKEN`, aan te maken via Business Settings → System Users → Generate New Token.
 
 **Demo-accounts na het seeden** (wachtwoord `Leadmore123!` voor iedereen, tenzij je `SEED_SUPER_ADMIN_EMAIL`/
 `SEED_SUPER_ADMIN_PASSWORD` in `.env.local` hebt gezet — dat overschrijft enkel het super_admin-account):
