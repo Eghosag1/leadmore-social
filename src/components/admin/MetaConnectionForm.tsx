@@ -21,11 +21,18 @@ export function MetaConnectionForm({
     <form action={formAction} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="facebookPageId">Facebook-pagina ID</Label>
-        <Input id="facebookPageId" name="facebookPageId" defaultValue={connection?.facebook_page_id ?? ""} placeholder="1234567890" />
+        <Input
+          key={connection?.facebook_page_id}
+          id="facebookPageId"
+          name="facebookPageId"
+          defaultValue={connection?.facebook_page_id ?? ""}
+          placeholder="1234567890"
+        />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="instagramAccountId">Instagram-account ID</Label>
         <Input
+          key={connection?.instagram_account_id}
           id="instagramAccountId"
           name="instagramAccountId"
           defaultValue={connection?.instagram_account_id ?? ""}
