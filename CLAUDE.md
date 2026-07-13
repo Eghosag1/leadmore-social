@@ -281,16 +281,33 @@ onder een Business Portfolio vallen.
 
 Voor Pagina's binnen een Business Portfolio, als alternatief voor de personal-OAuth-flow hierboven:
 `metaAuthService.connectViaBusinessManager(facebookPageId)` gebruikt Leadmore's eigen **System User**-token
-(`META_SYSTEM_USER_TOKEN`, aan te maken via Business Settings → System Users → Generate New Token) om rechtstreeks
-`GET /{page-id}?fields=access_token,instagram_business_account` aan te roepen — geen OAuth-redirect, geen
-per-kantoor consentscherm. **Vereist wel een handmatige, kantoor-kant stap die geen enkele API kan vervangen:** het
-kantoor moet hun Pagina eerst delen met Leadmore's Business Manager als partner (Business Settings → Pages →
-Assign Partner → Leadmore's Business ID invullen, of Leadmore vraagt toegang aan via de Pagina-ID). Pas daarna
-kan de admin in `BusinessManagerConnectForm` (`src/components/admin/BusinessManagerConnectForm.tsx`, op
-`/admin/agencies/[id]/settings` onder de gewone "Verbind met Facebook"-knop) het Facebook-pagina ID invullen via
-`connectAgencyViaBusinessManagerAction` (`src/app/admin/agencies/actions.ts`) — schrijft naar dezelfde
-`social_connections`-tabel, dus `facebookPublishingService` werkt ongewijzigd verder ongeacht welke van de twee
-methodes gebruikt werd.
+(`META_SYSTEM_USER_TOKEN`) om rechtstreeks `GET /{page-id}?fields=access_token,instagram_business_account` aan te
+roepen — geen OAuth-redirect, geen per-kantoor consentscherm. **Vereist wel een handmatige, kantoor-kant stap die
+geen enkele API kan vervangen:** het kantoor moet hun Pagina eerst delen met Leadmore's Business Manager als
+partner. Pas daarna kan de admin in `BusinessManagerConnectForm`
+(`src/components/admin/BusinessManagerConnectForm.tsx`, op `/admin/agencies/[id]/settings` onder de gewone
+"Verbind met Facebook"-knop) het Facebook-pagina ID invullen via `connectAgencyViaBusinessManagerAction`
+(`src/app/admin/agencies/actions.ts`) — schrijft naar dezelfde `social_connections`-tabel, dus
+`facebookPublishingService` werkt ongewijzigd verder ongeacht welke van de twee methodes gebruikt werd.
+
+**Belangrijke opmerking, geleerd tijdens het écht doorlopen van deze flow (2026-07-14):** Meta's UI koppelt
+tegenwoordig **elke** Facebook-pagina waaraan een Instagram-account gekoppeld wordt automatisch aan een Business
+Portfolio, ook een voorheen "onafhankelijke" pagina — deze koppelmethode is dus in de praktijk vaker nodig dan
+"uitzondering voor Business Portfolio's" doet vermoeden. `META_SYSTEM_USER_TOKEN` aanmaken vereist meer stappen dan
+enkel "Business Settings → System Users → Generate New Token":
+1. Systeemgebruiker aanmaken in **Leadmore's eigen** Business Manager (niet die van het kantoor).
+2. De systeemgebruiker expliciet een rol geven **op de app zelf** (Business Settings → Apps → de app → "Mensen
+   toewijzen") — de app enkel toevoegen aan het business-account volstaat niet; zonder deze stap geeft
+   token-generatie "Geen toestemmingen beschikbaar."
+3. Het kantoor deelt hun Pagina als partner met Leadmore's Business Manager (vanuit *hun* portfolio, Business
+   Settings → Pages → Partner toevoegen → Leadmore's Business Manager-ID).
+4. De systeemgebruiker moet **ook** expliciet een rol krijgen op die specifieke Pagina, vanuit Leadmore's eigen
+   Business Settings → Pagina's → de nu-zichtbare gedeelde pagina → "Mensen toewijzen." Overslaan van deze stap
+   geeft `(#10) This endpoint requires the 'pages_read_engagement' permission...` bij het effectief koppelen, óók
+   al staat die permissie wel aangevinkt op de token zelf — de permissie heeft dan gewoon niets om op toe te
+   passen.
+5. Pas daarna zijn `pages_show_list`/`pages_manage_posts`/`pages_read_engagement`/`instagram_basic`/
+   `instagram_content_publish` allemaal aanvinkbaar bij het genereren van het token.
 
 Tokens worden versleuteld opgeslagen (`src/lib/token-encryption.ts`, AES-256-GCM) — ook het handmatige token-veld
 in `MetaConnectionForm` gaat nu door `encryptToken()`; het veld toont nooit een opgeslagen token terug (leeg laten
