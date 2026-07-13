@@ -45,7 +45,11 @@ export default async function TemplatesGalleryPage() {
             });
             return (
               <Card key={template.id} className="overflow-hidden py-0">
-                <ScaledTemplateCanvas source={template.component_source} data={previewData} className="rounded-none shadow-none" />
+                <ScaledTemplateCanvas
+                  {...(template.template_key ? { templateKey: template.template_key } : { source: template.component_source })}
+                  data={previewData}
+                  className="rounded-none shadow-none"
+                />
                 <CardContent className="flex flex-col gap-1.5 pb-5 pt-4">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-neutral-900">{template.name}</p>

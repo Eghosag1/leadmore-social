@@ -24,7 +24,7 @@ import type { RenderService, RenderSlideInput, RenderSlideResult } from "./rende
 export const browserRenderService: RenderService = {
   async renderSlide(input: RenderSlideInput): Promise<RenderSlideResult> {
     const data = await getSlideRenderData(input.postId);
-    if (!data || !data.componentSource) {
+    if (!data || (!data.componentSource && !data.templateKey)) {
       // No template (or post not found) — nothing to overlay, the source photo is already the final visual.
       return { renderedImageUrl: input.sourceImageUrl };
     }

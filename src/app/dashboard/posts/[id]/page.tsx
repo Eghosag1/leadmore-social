@@ -36,6 +36,7 @@ export default async function PostDetailPage({
         jobs={data.jobs}
         propertyTitle={data.propertyTitle}
         componentSource={data.componentSource}
+        templateKey={data.templateKey}
         slideCount={data.slideCount}
         previewData={data.previewData}
         agencyName={data.agencyName}

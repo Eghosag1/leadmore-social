@@ -11,7 +11,7 @@ import { verifyRenderToken } from "@/lib/render/token";
  * Shows exactly one slide's DynamicTemplateRenderer output at a fixed
  * 1080x1350 (4:5) canvas (`data-render-canvas`, what Puppeteer screenshots).
  *
- * Two things make this deterministic, no CDN/DOM-scanning/blind waits
+ * Three things make this deterministic, no CDN/DOM-scanning/blind waits
  * needed:
  *   1. CSS for the template's actual classNames is compiled server-side
  *      (getCompiledCssForTemplate, via Tailwind v4's `@source inline(...)`)
@@ -22,9 +22,14 @@ import { verifyRenderToken } from "@/lib/render/token";
  *      templateValidationService when the template was published) over
  *      recompiling live — only templates that passed validation are ever
  *      selectable for a real post, so this is normally already populated;
- *      recompiling here is just a defensive fallback for older data.
+ *      recompiling here is just a defensive fallback for older data. Only
+ *      applies to `componentSource` templates — a `templateKey` (git-managed)
+ *      template needs none of this, its CSS is already in the app's normal
+ *      build output (see the "Templatearchitectuur" migration plan, step 4).
  *   2. RenderImage (a plain `<img>`) replaces next/image for this page only
- *      — no lazy-loading/optimization behavior to race against.
+ *      — no lazy-loading/optimization behavior to race against. Only applies
+ *      to the `componentSource` path; a `templateKey` template imports
+ *      next/image directly in its own file and relies on `priority` instead.
  */
 export default async function RenderSlidePage({
   params,
@@ -39,16 +44,16 @@ export default async function RenderSlidePage({
   if (!token || !verifyRenderToken(postId, token)) notFound();
 
   const data = await getSlideRenderData(postId);
-  if (!data || !data.componentSource) notFound();
+  if (!data || (!data.componentSource && !data.templateKey)) notFound();
 
-  const compiledCss = data.compiledCss ?? (await getCompiledCssForTemplate(data.componentSource));
+  const compiledCss = data.templateKey ? null : (data.compiledCss ?? (await getCompiledCssForTemplate(data.componentSource!)));
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: compiledCss }} />
+      {compiledCss && <style dangerouslySetInnerHTML={{ __html: compiledCss }} />}
       <div data-render-canvas="true" className="h-[1350px] w-[1080px] overflow-hidden">
         <DynamicTemplateRenderer
-          source={data.componentSource}
+          {...(data.templateKey ? { templateKey: data.templateKey } : { source: data.componentSource! })}
           data={data.previewData}
           slideIndex={Number(slideIndex) || 0}
           className="rounded-none shadow-none"

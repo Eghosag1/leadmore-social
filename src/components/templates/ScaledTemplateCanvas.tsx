@@ -22,7 +22,9 @@ const NATIVE_HEIGHT = 1350; // 4:5 — matches the internal render-slide/render-
  * it works in fixed-width contexts (the phone mockup) and fully responsive
  * ones (the template gallery grid) alike, with no per-caller magic numbers.
  */
-export function ScaledTemplateCanvas({ source, data, slideIndex, className }: { source: string } & TemplateComponentProps) {
+type TemplateReference = { source: string; templateKey?: undefined } | { templateKey: string; source?: undefined };
+
+export function ScaledTemplateCanvas({ source, templateKey, data, slideIndex, className }: TemplateReference & TemplateComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
 
@@ -40,7 +42,12 @@ export function ScaledTemplateCanvas({ source, data, slideIndex, className }: { 
   return (
     <div ref={containerRef} className="relative aspect-[4/5] w-full overflow-hidden">
       <div style={{ width: NATIVE_WIDTH, height: NATIVE_HEIGHT, transform: `scale(${scale})`, transformOrigin: "top left" }}>
-        <DynamicTemplateRenderer source={source} data={data} slideIndex={slideIndex} className={className} />
+        <DynamicTemplateRenderer
+          {...(templateKey ? { templateKey } : { source: source! })}
+          data={data}
+          slideIndex={slideIndex}
+          className={className}
+        />
       </div>
     </div>
   );

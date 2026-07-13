@@ -25,6 +25,7 @@ export interface AgencyTemplateForCustomer {
   name: string;
   description: string | null;
   component_source: string;
+  template_key: string | null;
   slide_count: number;
   type: AgencyTemplateRow["type"];
   post_format: AgencyTemplateRow["post_format"];
@@ -37,7 +38,7 @@ export async function listActiveAgencyTemplatesForCustomer(agencyId: string): Pr
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("agency_templates")
-    .select("id, name, description, component_source, slide_count, type, post_format, config, preview_image_url, sort_order")
+    .select("id, name, description, component_source, template_key, slide_count, type, post_format, config, preview_image_url, sort_order")
     .eq("agency_id", agencyId)
     .eq("status", "published")
     .order("sort_order");

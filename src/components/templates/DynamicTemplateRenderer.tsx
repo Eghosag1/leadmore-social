@@ -3,6 +3,7 @@
 import { Component as ReactComponent, useMemo, type ReactNode } from "react";
 import { compileTemplateSource } from "@/lib/dynamic-template";
 import { RenderImage } from "@/components/render/RenderImage";
+import { getTemplateDefinition } from "@/templates/registry";
 import type { TemplateComponentProps } from "./types";
 
 /**
@@ -41,12 +42,23 @@ class TemplateErrorBoundary extends ReactComponent<{ children: ReactNode }, { er
 }
 
 /**
- * Compiles `source` (admin-authored TSX, see src/lib/dynamic-template.ts)
- * into a live component and renders it. Used both for the admin's own live
- * preview while authoring a template, and for the agency's post-creation
- * preview — the same compiled output either way. `useRawImage` is only set
- * by the internal render-slide page (plain `<img>` instead of next/image —
- * see RenderImage.tsx); everywhere else uses the default (next/image).
+ * Resolves a template reference to a live component and renders it. Two
+ * sources, mutually exclusive:
+ *   - `source`: admin-authored TSX string, compiled at runtime (see
+ *     src/lib/dynamic-template.ts) — the original, still-supported path for
+ *     every template that hasn't been migrated to a git file yet.
+ *   - `templateKey`: a real, statically-imported component registered in
+ *     src/templates/registry.ts — no compilation needed, TypeScript already
+ *     checked it at build time. See the "Templatearchitectuur" migration
+ *     plan for why both paths coexist during the migration.
+ *
+ * Used both for the admin's own live preview while authoring a DB-string
+ * template, and for the agency's post-creation preview — the same resolved
+ * component either way. `useRawImage` only affects the `source` path (plain
+ * `<img>` instead of next/image, see RenderImage.tsx below) — registry
+ * templates import next/image directly in their own file, so there's no
+ * runtime hook to swap it; they rely on `priority` + the same img.complete
+ * readiness check (screenshotCanvas.ts) instead.
  *
  * `RenderImage` is resolved here, inside this already-client component,
  * rather than accepted as a component-reference prop — a Server Component
@@ -54,18 +66,26 @@ class TemplateErrorBoundary extends ReactComponent<{ children: ReactNode }, { er
  * the server/client boundary (React rejects it at runtime), so the caller
  * only ever passes the serializable `useRawImage` boolean.
  */
+type TemplateReference = { source: string; templateKey?: undefined } | { templateKey: string; source?: undefined };
+
 export function DynamicTemplateRenderer({
   source,
+  templateKey,
   useRawImage,
-  ...props
-}: TemplateComponentProps & { source: string; useRawImage?: boolean }) {
+  ...rendererProps
+}: TemplateComponentProps & TemplateReference & { useRawImage?: boolean }) {
   const result = useMemo(() => {
+    if (templateKey) {
+      const definition = getTemplateDefinition(templateKey);
+      if (!definition) return { component: null, error: `Onbekende template: "${templateKey}".` };
+      return { component: definition.Component, error: null as string | null };
+    }
     try {
-      return { component: compileTemplateSource(source, useRawImage ? RenderImage : undefined), error: null as string | null };
+      return { component: compileTemplateSource(source!, useRawImage ? RenderImage : undefined), error: null as string | null };
     } catch (error) {
       return { component: null, error: (error as Error).message };
     }
-  }, [source, useRawImage]);
+  }, [source, templateKey, useRawImage]);
 
   if (!result.component) {
     return <TemplateErrorDisplay message={result.error ?? "Onbekende fout."} />;
@@ -73,8 +93,8 @@ export function DynamicTemplateRenderer({
 
   const Template = result.component;
   return (
-    <TemplateErrorBoundary key={source}>
-      <Template {...props} />
+    <TemplateErrorBoundary key={source ?? templateKey}>
+      <Template {...rendererProps} />
     </TemplateErrorBoundary>
   );
 }

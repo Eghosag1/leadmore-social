@@ -133,6 +133,7 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
 
         <PhonePreview
           componentSource={data.componentSource}
+          templateKey={data.templateKey}
           slideCount={data.slideCount}
           data={data.previewData}
           caption={caption}

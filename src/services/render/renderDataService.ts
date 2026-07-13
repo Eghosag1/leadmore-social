@@ -7,8 +7,10 @@ import type { TemplateConfig, TemplateRenderProps } from "@/types/domain";
 export interface SlideRenderData {
   /** Null for "eigen foto's" posts — nothing to render, callers should skip the browser step entirely. */
   componentSource: string | null;
+  /** Set when this template is sourced from src/templates/registry.ts instead of componentSource — see the "Templatearchitectuur" migration plan. */
+  templateKey: string | null;
   previewData: TemplateRenderProps;
-  /** Server-compiled CSS already persisted on the template row (see templateValidationService), if it was ever validated. Null for templates saved before validation existed. */
+  /** Server-compiled CSS already persisted on the template row (see templateValidationService), if it was ever validated. Null for templates saved before validation existed, and always null for templateKey-sourced templates (their CSS comes from the app's normal build, not runtime compilation). */
   compiledCss: string | null;
 }
 
@@ -52,11 +54,17 @@ export async function getSlideRenderData(postId: string): Promise<SlideRenderDat
     },
   });
 
-  return { componentSource: template.component_source, previewData, compiledCss: template.compiled_css };
+  return {
+    componentSource: template.component_source,
+    templateKey: template.template_key,
+    previewData,
+    compiledCss: template.compiled_css,
+  };
 }
 
 export interface TemplateValidationRenderData {
   componentSource: string;
+  templateKey: string | null;
   previewData: TemplateRenderProps;
 }
 
@@ -82,5 +90,5 @@ export async function getTemplateValidationRenderData(templateId: string): Promi
     agencyName: agency?.name ?? "",
   });
 
-  return { componentSource: template.component_source, previewData };
+  return { componentSource: template.component_source, templateKey: template.template_key, previewData };
 }

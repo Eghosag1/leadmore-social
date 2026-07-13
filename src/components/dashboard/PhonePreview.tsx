@@ -13,6 +13,7 @@ type PreviewPlatform = "instagram" | "facebook";
 /** iPhone-frame post preview that toggles between Instagram and Facebook chrome, similar to Meta Ads Manager's placement preview. */
 export function PhonePreview({
   componentSource,
+  templateKey,
   slideCount,
   data,
   caption,
@@ -23,6 +24,8 @@ export function PhonePreview({
 }: {
   /** Null in "eigen foto's" mode — renders the raw photo instead of a compiled template. */
   componentSource: string | null;
+  /** Set when the selected template is git-managed (src/templates/registry.ts) instead of a DB-string. */
+  templateKey?: string | null;
   slideCount: number;
   data: TemplateRenderProps;
   caption: string;
@@ -80,6 +83,7 @@ export function PhonePreview({
             {platform === "instagram" ? (
               <InstagramPostMock
                 componentSource={componentSource}
+                templateKey={templateKey}
                 slideCount={slideCount}
                 data={data}
                 caption={caption}
@@ -91,6 +95,7 @@ export function PhonePreview({
             ) : (
               <FacebookPostMock
                 componentSource={componentSource}
+                templateKey={templateKey}
                 slideCount={slideCount}
                 data={data}
                 caption={caption}

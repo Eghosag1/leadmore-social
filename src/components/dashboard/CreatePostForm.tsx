@@ -135,6 +135,7 @@ export function CreatePostForm({
       : buildRawPhotoRenderProps({ property, images: ownImages, agencyName });
 
   const previewComponentSource = mode === "template" && selectedTemplate ? selectedTemplate.component_source : null;
+  const previewTemplateKey = mode === "template" && selectedTemplate ? selectedTemplate.template_key : null;
   const previewSlideCount = mode === "template" && selectedTemplate ? selectedTemplate.slide_count : Math.max(ownImages.length, 1);
 
   const hasValidSelection = mode === "template" ? !!selectedTemplate && !!coverImageUrl : isOwnCarousel ? selectedPhotoUrls.length > 0 : !!coverImageUrl;
@@ -389,6 +390,7 @@ export function CreatePostForm({
           {ownImages.length > 0 || (mode === "template" && selectedTemplate) ? (
             <PhonePreview
               componentSource={previewComponentSource}
+              templateKey={previewTemplateKey}
               slideCount={previewSlideCount}
               data={previewData}
               caption={caption}

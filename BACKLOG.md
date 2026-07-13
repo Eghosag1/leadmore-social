@@ -47,6 +47,31 @@ overschrijft de vorige versie definitief (met automatische terugval naar
 `draft` tot opnieuw gevalideerd, zie Fase 1). Expliciet uit scope gelaten bij
 de eerste versie van de validatieflow.
 
+## Custom fonts per kantoor/template
+
+Vandaag kan een template-component geen eigen font laden (schrijfcontract laat
+enkel `React`/`Image` toe, geen `import`s — zie CLAUDE.md "Admin-geschreven
+React-templates"), dus templates vallen terug op wat globaal in de app geladen
+is (nu enkel Geist Sans/Mono, `src/app/layout.tsx` + `globals.css`'s
+`@theme`-blok). Ontdekt bij het overzetten van een Figma-ontwerp
+("IvyPresto Headline"/"Agape", beide betaalde fonts) — moest vervangen worden
+door `font-serif`/`font-sans`-benaderingen. Op te lossen op platformniveau,
+niet per template: font-bestand(en) uploaden/registreren (per kantoor of
+globaal), via `next/font/local` laden, en koppelen aan een Tailwind
+`font-*`-utility zodat elke template ‘m gewoon kan gebruiken — geen wijziging
+aan het `new Function`-compileermodel zelf nodig.
+
+## Manier van templates aanmaken herbekijken
+
+De huidige flow (super_admin plakt/schrijft zelf TSX + Tailwind in een
+tekstvak, `TemplateForm`) bleek omslachtig bij het overzetten van een echt
+Figma-ontwerp — handmatig JSX/Tailwind schrijven (of laten genereren en dan
+copy-pasten) per template is trager en foutgevoeliger dan gewenst. Nog te
+bepalen wat de betere aanpak is; uitdrukkelijk **niet** terug naar een
+Canva-achtige drag-and-drop-builder voor het kantoor (blijft uitgesloten, zie
+CLAUDE.md "Productvisie") — dit gaat over hoe de *admin* templates aanmaakt,
+niet het kantoor.
+
 ## Vercel Cron i.p.v. QStash/fire-and-forget, zodra het project naar Pro verhuist
 
 Twee plekken gebruiken vandaag bewust geen Vercel Cron omdat het Hobby-plan

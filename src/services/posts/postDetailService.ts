@@ -16,6 +16,7 @@ export interface PostDetailData {
   status: PostStatus;
   jobs: { platform: Platform; status: PostStatus; error_message: string | null }[];
   componentSource: string | null;
+  templateKey: string | null;
   slideCount: number;
   previewData: TemplateRenderProps;
   agencyName: string;
@@ -98,6 +99,7 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
   const firstSlide = slides?.[0];
 
   let componentSource: string | null = null;
+  let templateKey: string | null = null;
   let slideCount = Math.max(slides?.length ?? 1, 1);
   let previewData: TemplateRenderProps;
 
@@ -107,6 +109,7 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
 
     const slideText = (firstSlide?.text_content ?? {}) as { title?: string; description?: string | null };
     componentSource = template.component_source;
+    templateKey = template.template_key;
     slideCount = template.slide_count;
     previewData = buildTemplateRenderProps({
       property,
@@ -139,6 +142,7 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     status: post.status,
     jobs: jobs ?? [],
     componentSource,
+    templateKey,
     slideCount,
     previewData,
     agencyName: agency?.name ?? "",

@@ -9,6 +9,7 @@ import type { TemplateRenderProps } from "@/types/domain";
 
 export function InstagramPostMock({
   componentSource,
+  templateKey,
   slideCount,
   data,
   caption,
@@ -19,6 +20,7 @@ export function InstagramPostMock({
 }: {
   /** Null in "eigen foto's" mode — renders the raw photo instead of a compiled template. */
   componentSource: string | null;
+  templateKey?: string | null;
   slideCount: number;
   data: TemplateRenderProps;
   caption: string;
@@ -40,8 +42,13 @@ export function InstagramPostMock({
       </div>
 
       <div className="relative w-full">
-        {componentSource ? (
-          <ScaledTemplateCanvas source={componentSource} data={data} slideIndex={slideIndex} className="rounded-none shadow-none" />
+        {componentSource || templateKey ? (
+          <ScaledTemplateCanvas
+            {...(templateKey ? { templateKey } : { source: componentSource! })}
+            data={data}
+            slideIndex={slideIndex}
+            className="rounded-none shadow-none"
+          />
         ) : (
           <RawImageSlide imageUrl={data.images[slideIndex] ?? data.images[0]} className="rounded-none shadow-none" />
         )}

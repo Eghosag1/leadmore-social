@@ -31,6 +31,7 @@ export function PostDetailClient({
   jobs,
   propertyTitle,
   componentSource,
+  templateKey,
   slideCount,
   previewData,
   agencyName,
@@ -47,6 +48,7 @@ export function PostDetailClient({
   jobs: { platform: Platform; status: PostStatus; error_message: string | null }[];
   propertyTitle: string;
   componentSource: string | null;
+  templateKey?: string | null;
   slideCount: number;
   previewData: TemplateRenderProps;
   agencyName: string;
@@ -171,6 +173,7 @@ export function PostDetailClient({
       <div className="lg:sticky lg:top-8 lg:self-start">
         <PhonePreview
           componentSource={componentSource}
+          templateKey={templateKey}
           slideCount={slideCount}
           data={previewData}
           caption={caption}

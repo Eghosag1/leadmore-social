@@ -38,19 +38,26 @@ export async function validateAndPublishTemplate(templateId: string): Promise<Te
     return { ok: false, error };
   };
 
-  // Step 1: does it compile at all? Cheap, no browser needed.
-  try {
-    compileTemplateSource(template.component_source);
-  } catch (error) {
-    return fail((error as Error).message);
-  }
+  // Steps 1 and 2 (compile + generate Tailwind CSS) only apply to
+  // componentSource templates — a template_key (git-managed) template was
+  // already type-checked and Tailwind-scanned at `npm run build`, so there's
+  // nothing left to validate there beyond the real test-render in step 3. See
+  // the "Templatearchitectuur" migration plan, step 4.
+  let compiledCss: string | null = null;
+  if (!template.template_key) {
+    // Step 1: does it compile at all? Cheap, no browser needed.
+    try {
+      compileTemplateSource(template.component_source);
+    } catch (error) {
+      return fail((error as Error).message);
+    }
 
-  // Step 2: does Tailwind generate CSS for its classNames without error?
-  let compiledCss: string;
-  try {
-    compiledCss = await getCompiledCssForTemplate(template.component_source);
-  } catch (error) {
-    return fail(`Kon de Tailwind-CSS niet genereren: ${(error as Error).message}`);
+    // Step 2: does Tailwind generate CSS for its classNames without error?
+    try {
+      compiledCss = await getCompiledCssForTemplate(template.component_source);
+    } catch (error) {
+      return fail(`Kon de Tailwind-CSS niet genereren: ${(error as Error).message}`);
+    }
   }
 
   // Step 3: does it actually render, per slide, against real dummy data?
@@ -69,7 +76,7 @@ export async function validateAndPublishTemplate(templateId: string): Promise<Te
     .update({
       status: "published",
       compiled_css: compiledCss,
-      compiled_css_hash: hashTemplateSource(template.component_source),
+      compiled_css_hash: template.template_key ? null : hashTemplateSource(template.component_source),
       validated_at: new Date().toISOString(),
       validation_error: null,
     })

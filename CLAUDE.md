@@ -132,6 +132,24 @@ een kapotte template de pagina niet laat crashen).
 - **Live preview tijdens het schrijven**: `TemplateForm` toont de `DynamicTemplateRenderer`-output naast de
   editor, met een voorbeeldpand (`src/data/mock/example-property.ts`), zodat de admin WYSIWYG werkt.
 
+**Tweede, in opbouw zijnde bronpad: git-beheerde templates (`template_key`).** Naast de hierboven beschreven
+DB-string-templates bestaat sinds een proof-of-concept ook een tweede, parallel pad: een template als een echt
+`.tsx`-bestand in `src/templates/<agency-slug>/...`, geregistreerd in `src/templates/registry.ts`
+(`TemplateDefinition[]`, `getTemplateDefinition(templateKey)`). Zo'n bestand is een normale, statisch
+geïmporteerde component die exact hetzelfde `TemplateComponentProps`-contract nakomt, maar wél echte TypeScript-
+controle, echte `import`s (bv. gedeelde bouwstenen als `src/templates/components/AutoSizeText.tsx`) en git-
+geschiedenis krijgt — zie de "Templatearchitectuur"-analyse en het migratieplan voor de volledige onderbouwing.
+`agency_templates.template_key` (nullable, `0011_template_registry_key.sql`) onderscheidt de twee: leeg = het
+bestaande `component_source`-pad; ingevuld = dit registry-pad. `DynamicTemplateRenderer` en
+`ScaledTemplateCanvas` accepteren daarom een union-prop (`source` XOR `templateKey`) en lossen zelf op welk pad
+van toepassing is — elke aanroeper geeft gewoon door welk van de twee de rij heeft. Voor `template_key`-rijen
+slaat zowel de renderpijplijn (`/internal/render-slide`, `/internal/render-template`) als
+`templateValidationService` de runtime-Tailwind-compilatie (`compile-tailwind.ts`) over — Tailwind heeft die
+classNames al bij `npm run build` gezien, er is niets te injecteren. **Dit is vandaag enkel een bewezen PoC** (één
+template, `vastgoed-de-meester/wuustwezel-single.tsx`) — er is nog geen admin-UI om een kantoor aan een
+registry-template te koppelen (gebeurt nu handmatig via SQL); de volledige migratie van bestaande templates en het
+uiteindelijk verwijderen van het `new Function`-compileerpad zijn bewust nog niet gedaan.
+
 **Belangrijke afweging — geen sandbox.** De geplakte code draait client-side, ook in de browser van
 agency-gebruikers zodra zij een post maken met die template. `new Function`-uitvoering is géén echte sandbox:
 gecompileerde code heeft ambient toegang tot browser-globals (`window`/`fetch`/`document`). Dit is aanvaard omdat
@@ -421,7 +439,8 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
    `0008_post_lifecycle.sql` (voegt `pending_render` toe aan `post_status` en `posts.platforms`) →
    `0009_property_listing_type.sql` (voegt `properties.listing_type` toe — "te koop" vs. "te huur", los van
    `property_type`/`status`) → `0010_instagram_scheduling.sql` (voegt `'publishing'` toe aan `post_status`, de
-   claim-status tijdens de Instagram-sweep).
+   claim-status tijdens de Instagram-sweep) → `0011_template_registry_key.sql` (voegt `agency_templates.template_key`
+   toe, nullable — het git-beheerde templatepad, zie "Admin-geschreven React-templates" hierboven).
 3. `npm run seed` — vult het project met demo-kantoren, panden, templates en posts (idempotent, veilig opnieuw te
    draaien).
 4. `npm run dev`.

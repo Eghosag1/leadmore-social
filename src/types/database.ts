@@ -98,8 +98,10 @@ export type AgencyTemplateRow = {
   agency_id: string;
   name: string;
   description: string | null;
-  /** Admin-authored TSX source, compiled at runtime — see src/lib/dynamic-template.ts. */
+  /** Admin-authored TSX source, compiled at runtime — see src/lib/dynamic-template.ts. Ignored when template_key is set. */
   component_source: string;
+  /** When set, this row is sourced from the git-managed src/templates/registry.ts instead of component_source — see src/templates/types.ts. */
+  template_key: string | null;
   /** 1 = single post, >1 = carousel with that many slides. */
   slide_count: number;
   type: TemplateType;
