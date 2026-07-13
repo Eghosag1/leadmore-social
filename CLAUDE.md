@@ -309,6 +309,22 @@ enkel "Business Settings → System Users → Generate New Token":
 5. Pas daarna zijn `pages_show_list`/`pages_manage_posts`/`pages_read_engagement`/`instagram_basic`/
    `instagram_content_publish` allemaal aanvinkbaar bij het genereren van het token.
 
+Stap 1, 2 en 5 zijn eenmalig voor Leadmore als geheel (al gebeurd). Stap 3 en 4 herhalen zich per kantoor. Om dat
+draaglijk te houden staat `BusinessManagerConnectForm` intussen niet meer enkel het invulveld, maar een uitklapbare
+stap-voor-stapgids (met per-kantoor-afvinklijst, bewaard in `localStorage`, puur als geheugensteun — niets
+server-side hangt hiervan af) én een read-only veld met Leadmore's Business Manager-ID (optionele env-var
+`META_BUSINESS_MANAGER_ID`, `src/lib/meta/env.ts`) met een kopieerknop, zodat de admin die niet uit het hoofd hoeft
+te kennen bij het doorgeven aan een kantoor.
+
+**Onderzocht maar nog niet afgerond: Meta Business Verification.** Als Leadmore's Business Manager-account
+Verification doorloopt (Business Settings → Security Centre → "Start Verification"), is de hypothese dat de
+gewone, eenvoudige OAuth-flow (personal-flow hierboven) ook voor Business-Portfolio-Pagina's betrouwbaar zou gaan
+werken, wat deze hele Business Manager-omweg voor toekomstige kantoren overbodig zou maken — nog niet bevestigd.
+Vereisten: Business Manager idealiter 30-60+ dagen oud, 2FA aan, een app gekoppeld (✅ al in orde), en minstens één
+advertentie-account met een schone betaalgeschiedenis (nog te checken of dit aanwezig is). Vereist verder officiële
+bedrijfsdocumenten (naam/adres exact gelijk aan de Business Manager's juridische gegevens) — een bedrijfsbeslissing,
+geen coderingstaak. Doorlooptijd doorgaans 3-14 werkdagen.
+
 Tokens worden versleuteld opgeslagen (`src/lib/token-encryption.ts`, AES-256-GCM) — ook het handmatige token-veld
 in `MetaConnectionForm` gaat nu door `encryptToken()`; het veld toont nooit een opgeslagen token terug (leeg laten
 = huidig token behouden, zie `updateAgencyMetaConnectionAction`). `facebookPublishingService.schedule()` ontsleutelt

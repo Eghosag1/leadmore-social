@@ -12,6 +12,7 @@ import { CrmConnectionForm } from "@/components/admin/CrmConnectionForm";
 import { DeleteAgencyButton } from "@/components/admin/DeleteAgencyButton";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { metaBusinessManagerId } from "@/lib/meta/env";
 import {
   updateAgencyAction,
   syncAgencyCrmAction,
@@ -125,7 +126,7 @@ export default async function AgencySettingsPage({
                 </form>
                 <CopyMetaLinkButton agencyId={agency.id} />
               </div>
-              <BusinessManagerConnectForm action={boundBusinessManagerConnect} />
+              <BusinessManagerConnectForm agencyId={agency.id} businessManagerId={metaBusinessManagerId()} action={boundBusinessManagerConnect} />
               <MetaConnectionForm action={boundMetaUpdate} connection={metaConnection ?? null} />
             </CardContent>
           </Card>

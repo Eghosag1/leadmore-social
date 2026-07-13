@@ -16,3 +16,5 @@ export const metaRedirectUri = () => readEnv("META_REDIRECT_URI");
 export const tokenEncryptionKey = () => readEnv("TOKEN_ENCRYPTION_KEY");
 /** Long-lived token for Leadmore's own Business Manager System User — only needed for the Business Portfolio connect path. */
 export const metaSystemUserToken = () => readEnv("META_SYSTEM_USER_TOKEN");
+/** Optional — Leadmore's own Business Manager ID, shown in the Business Manager connect guide so an agency knows what to enter when sharing their Page as a partner. Purely informational, Meta's API never needs it from us. */
+export const metaBusinessManagerId = (): string | undefined => process.env.META_BUSINESS_MANAGER_ID;
