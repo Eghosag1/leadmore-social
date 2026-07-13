@@ -43,6 +43,37 @@ export async function getInstagramToken(
 }
 
 /**
+ * Instagram fetches+processes image_url asynchronously after container
+ * creation — publishing immediately after creating the container routinely
+ * fails with "(#9004) Media ID is not available" because the container
+ * isn't done processing yet (confirmed via a real test). Poll status_code
+ * until it's FINISHED (or a terminal error) before calling media_publish.
+ * Bounded to ~12s total so one slow container doesn't eat the sweep's
+ * shared 60s Hobby-plan budget when there are other due jobs in the batch.
+ */
+async function waitForContainerReady(containerId: string, pageToken: string): Promise<{ ok: true } | { ok: false; errorMessage: string }> {
+  const maxAttempts = 8;
+  const delayMs = 1500;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const response = await fetch(`${GRAPH_BASE}/${containerId}?fields=status_code&access_token=${encodeURIComponent(pageToken)}`);
+    const result = await response.json();
+    if (!response.ok) {
+      return { ok: false, errorMessage: result?.error?.message ?? `Instagram API-fout (${response.status})` };
+    }
+
+    if (result.status_code === "FINISHED") return { ok: true };
+    if (result.status_code === "ERROR" || result.status_code === "EXPIRED") {
+      return { ok: false, errorMessage: `Instagram kon de afbeelding niet verwerken (status: ${result.status_code}).` };
+    }
+    // IN_PROGRESS (or PUBLISHED, unexpected here) — wait and check again.
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  return { ok: false, errorMessage: "Instagram was de afbeelding nog aan het verwerken en werd niet op tijd klaar." };
+}
+
+/**
  * Real two-step Instagram publish: create a media container, then publish
  * it. Used both for an immediate (scheduledAt already due) post and by
  * instagramSchedulerSweepService.ts once a scheduled post's time comes.
@@ -66,6 +97,9 @@ export async function publishPhotoNow(params: {
     if (!containerResponse.ok) {
       return { ok: false, errorMessage: container?.error?.message ?? `Instagram API-fout (${containerResponse.status})` };
     }
+
+    const ready = await waitForContainerReady(container.id, params.pageToken);
+    if (!ready.ok) return { ok: false, errorMessage: ready.errorMessage };
 
     const publishResponse = await fetch(`${GRAPH_BASE}/${params.instagramAccountId}/media_publish`, {
       method: "POST",

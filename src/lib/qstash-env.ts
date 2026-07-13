@@ -10,6 +10,8 @@ function readEnv(name: string): string {
   return value;
 }
 
+/** QStash's publish endpoint is region-specific (e.g. https://qstash-eu-central-1.upstash.io) since Upstash added multi-region support — shown on the QStash console's region detail page alongside the token. Not a fixed https://qstash.upstash.io for every account. */
+export const qstashUrl = () => readEnv("QSTASH_URL");
 /** Bearer token used to publish (schedule) messages to QStash — from the Upstash console. */
 export const qstashToken = () => readEnv("QSTASH_TOKEN");
 /** Used together to verify the Upstash-Signature header on incoming sweep-route calls — QStash rotates these, both must be checked. */

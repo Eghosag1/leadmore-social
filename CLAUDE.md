@@ -351,10 +351,11 @@ datum/uur stilzwijgend genegeerd worden en de post alsnog op het oude tijdstip p
 
 **Nieuwe env-vars** (zie "Lokale setup"): `META_APP_ID`, `META_APP_SECRET`, `META_REDIRECT_URI`,
 `TOKEN_ENCRYPTION_KEY`, optioneel `META_SYSTEM_USER_TOKEN` (enkel voor de Business Manager-koppelmethode
-hierboven), en voor Instagram-scheduling `QSTASH_TOKEN`/`QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`
-(gratis account op upstash.com → QStash). Zonder deze vars blijft de app gewoon bouwen/draaien (zelfde
-lazy-`readEnv()`-patroon als de Supabase-vars) — enkel de betrokken koppeling zelf faalt dan met een duidelijke
-foutmelding i.p.v. een cryptische crash.
+hierboven), en voor Instagram-scheduling `QSTASH_URL`/`QSTASH_TOKEN`/`QSTASH_CURRENT_SIGNING_KEY`/
+`QSTASH_NEXT_SIGNING_KEY` (gratis account op upstash.com → QStash — `QSTASH_URL` is regio-specifiek sinds
+Upstash multi-region ondersteunt, bv. `https://qstash-eu-central-1.upstash.io`, geen vaste URL voor elk account).
+Zonder deze vars blijft de app gewoon bouwen/draaien (zelfde lazy-`readEnv()`-patroon als de Supabase-vars) —
+enkel de betrokken koppeling zelf faalt dan met een duidelijke foutmelding i.p.v. een cryptische crash.
 
 Alle mock-vervangingen raken enkel bestanden in `src/services/**` — de rest van de app (pagina's, services die
 ervan afhangen zoals `postSchedulerService`) blijft ongewijzigd omdat alles achter de `CrmService` /
@@ -416,9 +417,10 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
 6. Optioneel, enkel nodig voor de Business Manager-koppelmethode (zie "Tweede koppelmethode" hierboven):
    `META_SYSTEM_USER_TOKEN`, aan te maken via Business Settings → System Users → Generate New Token.
 7. Optioneel, enkel nodig voor echte Instagram-scheduling (zie "Instagram-scheduling" hierboven): gratis account op
-   upstash.com → QStash → `QSTASH_TOKEN` (Publish-tab) en `QSTASH_CURRENT_SIGNING_KEY`/`QSTASH_NEXT_SIGNING_KEY`
-   (Signing Keys-tab). Zonder deze vars blijft Facebook-scheduling gewoon werken; enkel het inplannen van een
-   Instagram-post faalt dan met een duidelijke foutmelding.
+   upstash.com → QStash → kies een regio (bv. EU Region) → op die regio-detailpagina staan alle vier: `QSTASH_URL`
+   (regio-specifiek, bv. `https://qstash-eu-central-1.upstash.io` — géén vaste URL voor elk account), `QSTASH_TOKEN`,
+   `QSTASH_CURRENT_SIGNING_KEY` en `QSTASH_NEXT_SIGNING_KEY`. Zonder deze vars blijft Facebook-scheduling gewoon
+   werken; enkel het inplannen van een Instagram-post faalt dan met een duidelijke foutmelding.
 
 **Demo-accounts na het seeden** (wachtwoord `Leadmore123!` voor iedereen, tenzij je `SEED_SUPER_ADMIN_EMAIL`/
 `SEED_SUPER_ADMIN_PASSWORD` in `.env.local` hebt gezet — dat overschrijft enkel het super_admin-account):

@@ -1,5 +1,5 @@
 import "server-only";
-import { qstashToken } from "@/lib/qstash-env";
+import { qstashToken, qstashUrl } from "@/lib/qstash-env";
 import { siteUrl } from "@/lib/site-url";
 
 /**
@@ -18,8 +18,13 @@ import { siteUrl } from "@/lib/site-url";
  * never publish days later.
  */
 export async function scheduleInstagramSweep(notBefore: Date): Promise<void> {
+  // The destination URL goes after /v2/publish/ literally, not
+  // percent-encoded — QStash parses everything after that segment as the
+  // raw target URL. Encoding it (the original bug here) mangles the
+  // http(s):// scheme into %3A%2F%2F, which QStash then rejects outright
+  // with "endpoint has invalid scheme".
   const target = `${siteUrl()}/api/internal/instagram-sweep`;
-  const response = await fetch(`https://qstash.upstash.io/v2/publish/${encodeURIComponent(target)}`, {
+  const response = await fetch(`${qstashUrl()}/v2/publish/${target}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${qstashToken()}`,
