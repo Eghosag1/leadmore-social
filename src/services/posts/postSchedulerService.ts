@@ -138,7 +138,16 @@ export async function publishPost(input: PublishPostInput, client?: SupabaseClie
     if (!result.ok) failedPlatforms.push(platform);
   }
 
-  if (platforms.length > 0 && failedPlatforms.length === platforms.length) {
+  // Any failed platform — not just "every platform failed" — must surface as
+  // publish_failed. A partial failure (e.g. Facebook scheduled fine,
+  // Instagram's schedule() call threw) used to leave the post on 'scheduled',
+  // which reconcilePublishedPosts() then silently flipped to 'published' once
+  // the *other* platform's own job confirmed — the failed platform was never
+  // in that query's job set at all (it filters `status = 'scheduled'`), so
+  // nothing ever surfaced the failure at the post level. Real bug, found
+  // 2026-07-14 via a live test where the Instagram job failed but the post
+  // still ended up showing "Gepubliceerd".
+  if (failedPlatforms.length > 0) {
     await supabase.from("posts").update({ status: "publish_failed" }).eq("id", input.postId);
   }
 
@@ -198,8 +207,11 @@ export async function retryPublish(postId: string, agencyId: string): Promise<Pu
     if (!result.ok) failedPlatforms.push(job.platform);
   }
 
-  const platforms = post?.platforms ?? [];
-  if (platforms.length > 0 && failedPlatforms.length === platforms.length) {
+  // Same "any failure, not just every platform" fix as publishPost() above —
+  // if this post has another platform that already succeeded before this
+  // retry, a still-failing retried platform must not get overwritten back to
+  // 'scheduled'.
+  if (failedPlatforms.length > 0) {
     await supabase.from("posts").update({ status: "publish_failed" }).eq("id", postId);
   } else {
     await supabase.from("posts").update({ status: "scheduled" }).eq("id", postId);

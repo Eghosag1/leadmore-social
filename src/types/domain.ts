@@ -150,16 +150,24 @@ export interface PostStatusBadgeMeta {
   tone: "neutral" | "info" | "success" | "warning" | "danger";
 }
 
+// pending_render/rendering/rendered/publishing are internal pipeline steps
+// (see postQueueService.ts's processPendingPost and CLAUDE.md's
+// "Achtergrond-queue voor renderen") — none of them are actionable for
+// whoever's looking at the badge, and they're normally gone within seconds.
+// Showing them as distinct statuses just adds noise; they display as
+// "Ingepland" like `scheduled` and only surface as something different if
+// the pipeline actually fails (render_failed/publish_failed) or finishes
+// (published).
 export const POST_STATUS_META: Record<PostStatus, PostStatusBadgeMeta> = {
   draft: { label: "Concept", tone: "neutral" },
-  pending_render: { label: "In wachtrij", tone: "info" },
-  rendering: { label: "Wordt gerenderd", tone: "info" },
+  pending_render: { label: "Ingepland", tone: "success" },
+  rendering: { label: "Ingepland", tone: "success" },
   // Legacy value — posts created before the render/publish split may still carry
   // this; 'rendered' is what new posts use for the same meaning.
-  ready: { label: "Klaar", tone: "info" },
-  rendered: { label: "Gerenderd", tone: "info" },
+  ready: { label: "Ingepland", tone: "success" },
+  rendered: { label: "Ingepland", tone: "success" },
   scheduled: { label: "Ingepland", tone: "success" },
-  publishing: { label: "Wordt gepubliceerd", tone: "info" },
+  publishing: { label: "Ingepland", tone: "success" },
   published: { label: "Gepubliceerd", tone: "success" },
   // Legacy value — new posts use render_failed/publish_failed for the same
   // meaning, split by which step actually failed.
