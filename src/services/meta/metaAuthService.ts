@@ -5,21 +5,21 @@ import { signState } from "@/lib/meta/state";
 const GRAPH_VERSION = "v21.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
 
-// instagram_business_basic / instagram_business_content_publish is the
-// current (2026) permission naming for Instagram publishing via this
-// Facebook-Login-for-Business flow — the older instagram_basic /
-// instagram_content_publish names were deprecated January 27, 2025. Still
-// worth double-checking against the live Meta App Dashboard before
-// submitting App Review (see instagramPublishingService.ts and the
-// CLAUDE.md Instagram section — Meta's docs on this exact naming were hard
-// to pin down with full confidence even at time of writing).
-const SCOPES = [
-  "pages_show_list",
-  "pages_manage_posts",
-  "pages_read_engagement",
-  "instagram_business_basic",
-  "instagram_business_content_publish",
-].join(",");
+// Confirmed via a real "Invalid Scopes" error from Meta on this exact app:
+// instagram_business_basic / instagram_business_content_publish are NOT
+// valid here — those belong to the separate "Instagram API with Instagram
+// Login" product (its own login dialog at instagram.com, direct IG account
+// login), not this classic Facebook Login dialog. This app instead uses
+// "Instagram API with Facebook Login" (Page → linked Instagram Business
+// Account via /me/accounts + instagram_business_account, see
+// handleOAuthCallback below) — for that flow Meta's own docs list
+// instagram_basic + instagram_content_publish. Still worth a final check
+// against the live Meta App Dashboard if this ever errors again — online
+// docs for this exact distinction are inconsistent even across Meta's own
+// pages.
+const SCOPES = ["pages_show_list", "pages_manage_posts", "pages_read_engagement", "instagram_basic", "instagram_content_publish"].join(
+  ",",
+);
 
 export interface MetaAuthUrlParams {
   agencyId: string;
