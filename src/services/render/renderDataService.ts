@@ -30,7 +30,7 @@ export async function getSlideRenderData(postId: string): Promise<SlideRenderDat
 
   const [{ data: property }, { data: agency }, { data: slides }] = await Promise.all([
     admin.from("properties").select("*").eq("id", post.property_id).maybeSingle(),
-    admin.from("agencies").select("name, logo_url").eq("id", post.agency_id).single(),
+    admin.from("agencies").select("name, logo_url, custom_font_url, custom_font_family").eq("id", post.agency_id).single(),
     admin.from("post_slides").select("*").eq("post_id", postId).order("sort_order"),
   ]);
   if (!property) return null;
@@ -47,6 +47,8 @@ export async function getSlideRenderData(postId: string): Promise<SlideRenderDat
     images: images ?? [],
     config: template.config as unknown as TemplateConfig,
     agencyName: agency?.name ?? "",
+    customFontFamily: agency?.custom_font_family,
+    customFontUrl: agency?.custom_font_url,
     overrides: {
       title: slideText.title,
       description: slideText.description ?? undefined,
@@ -81,13 +83,19 @@ export async function getTemplateValidationRenderData(templateId: string): Promi
   const { data: template } = await admin.from("agency_templates").select("*").eq("id", templateId).maybeSingle();
   if (!template) return null;
 
-  const { data: agency } = await admin.from("agencies").select("name").eq("id", template.agency_id).maybeSingle();
+  const { data: agency } = await admin
+    .from("agencies")
+    .select("name, custom_font_url, custom_font_family")
+    .eq("id", template.agency_id)
+    .maybeSingle();
 
   const previewData = buildTemplateRenderProps({
     property: EXAMPLE_PROPERTY,
     images: EXAMPLE_PROPERTY_IMAGES,
     config: template.config as unknown as TemplateConfig,
     agencyName: agency?.name ?? "",
+    customFontFamily: agency?.custom_font_family,
+    customFontUrl: agency?.custom_font_url,
   });
 
   return { componentSource: template.component_source, templateKey: template.template_key, previewData };

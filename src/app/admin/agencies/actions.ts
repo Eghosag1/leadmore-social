@@ -27,6 +27,8 @@ function readAgencyFields(formData: FormData) {
     name: String(formData.get("name") ?? "").trim(),
     logoUrl: String(formData.get("logoUrl") ?? "").trim() || null,
     websiteUrl: String(formData.get("websiteUrl") ?? "").trim() || null,
+    customFontUrl: String(formData.get("customFontUrl") ?? "").trim() || null,
+    customFontFamily: String(formData.get("customFontFamily") ?? "").trim() || null,
   };
 }
 
@@ -43,6 +45,8 @@ export async function createAgencyAction(_prev: AgencyFormState, formData: FormD
       slug: slugify(fields.name),
       logo_url: fields.logoUrl,
       website_url: fields.websiteUrl,
+      custom_font_url: fields.customFontUrl,
+      custom_font_family: fields.customFontFamily,
     })
     .select("id")
     .single();
@@ -70,6 +74,8 @@ export async function updateAgencyAction(agencyId: string, _prev: AgencyFormStat
       name: fields.name,
       logo_url: fields.logoUrl,
       website_url: fields.websiteUrl,
+      custom_font_url: fields.customFontUrl,
+      custom_font_family: fields.customFontFamily,
     })
     .eq("id", agencyId);
 

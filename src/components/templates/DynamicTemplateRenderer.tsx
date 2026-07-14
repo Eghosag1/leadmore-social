@@ -27,6 +27,33 @@ function TemplateErrorDisplay({ message }: { message: string }) {
   );
 }
 
+function fontFormatFromUrl(url: string): string {
+  const extension = url.split("?")[0].split(".").pop()?.toLowerCase();
+  switch (extension) {
+    case "woff2":
+      return "woff2";
+    case "woff":
+      return "woff";
+    case "otf":
+      return "opentype";
+    default:
+      return "truetype";
+  }
+}
+
+/**
+ * Declares the agency's custom font (if any) as `@font-face` and exposes it
+ * via the fixed `--font-brand` CSS variable — see globals.css's `.font-brand`
+ * utility, which every template's className can opt into. One centralized
+ * injection point (here, not per-template) since this is agency-level
+ * branding, not something an individual template configures — see
+ * src/components/admin/FontUploader.tsx and the agency settings page.
+ */
+function CustomFontStyle({ family, url }: { family: string; url: string }) {
+  const css = `@font-face{font-family:'${family}';src:url('${url}') format('${fontFormatFromUrl(url)}');font-display:swap;}:root{--font-brand:'${family}',ui-sans-serif,system-ui,sans-serif;}`;
+  return <style dangerouslySetInnerHTML={{ __html: css }} />;
+}
+
 /** Class component required: React error boundaries can't be hooks. `key`-ed by source so it resets on edit. */
 class TemplateErrorBoundary extends ReactComponent<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
@@ -92,8 +119,10 @@ export function DynamicTemplateRenderer({
   }
 
   const Template = result.component;
+  const { data } = rendererProps;
   return (
     <TemplateErrorBoundary key={source ?? templateKey}>
+      {data.customFontFamily && data.customFontUrl && <CustomFontStyle family={data.customFontFamily} url={data.customFontUrl} />}
       <Template {...rendererProps} />
     </TemplateErrorBoundary>
   );

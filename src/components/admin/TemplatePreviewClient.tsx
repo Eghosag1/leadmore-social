@@ -19,6 +19,8 @@ export function TemplatePreviewClient({
   type,
   config,
   agencyName,
+  customFontFamily,
+  customFontUrl,
   properties,
 }: {
   componentSource: string;
@@ -26,6 +28,8 @@ export function TemplatePreviewClient({
   type: TemplateType;
   config: TemplateConfig;
   agencyName: string;
+  customFontFamily?: string;
+  customFontUrl?: string;
   properties: PreviewPropertyOption[];
 }) {
   const [propertyIndex, setPropertyIndex] = useState(0);
@@ -40,8 +44,10 @@ export function TemplatePreviewClient({
       images: selected.images,
       config,
       agencyName,
+      customFontFamily,
+      customFontUrl,
     });
-  }, [selected, config, agencyName]);
+  }, [selected, config, agencyName, customFontFamily, customFontUrl]);
 
   if (!previewData) {
     return <p className="text-sm text-muted-foreground">Geen voorbeeldpand beschikbaar.</p>;

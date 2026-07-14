@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { facebookPublishingService } from "@/services/meta/facebookPublishingService";
 import { instagramPublishingService } from "@/services/meta/instagramPublishingService";
+import { notifyPostFailure } from "@/services/notifications/postFailureNotificationService";
 import type { Database } from "@/types/database";
 import type { Platform, PostType } from "@/types/enums";
 
@@ -111,6 +112,7 @@ export async function publishPost(input: PublishPostInput, client?: SupabaseClie
     .eq("id", input.postId);
 
   const failedPlatforms: Platform[] = [];
+  const failureReasons: string[] = [];
 
   for (const platform of platforms) {
     const service = PLATFORM_SERVICE[platform];
@@ -135,7 +137,10 @@ export async function publishPost(input: PublishPostInput, client?: SupabaseClie
     });
     if (jobError) throw new Error(jobError.message);
 
-    if (!result.ok) failedPlatforms.push(platform);
+    if (!result.ok) {
+      failedPlatforms.push(platform);
+      failureReasons.push(`${platform}: ${result.errorMessage ?? "onbekende fout"}`);
+    }
   }
 
   // Any failed platform — not just "every platform failed" — must surface as
@@ -149,6 +154,7 @@ export async function publishPost(input: PublishPostInput, client?: SupabaseClie
   // still ended up showing "Gepubliceerd".
   if (failedPlatforms.length > 0) {
     await supabase.from("posts").update({ status: "publish_failed" }).eq("id", input.postId);
+    await notifyPostFailure(input.postId, "publish", failureReasons.join("; "));
   }
 
   return { ok: failedPlatforms.length === 0, failedPlatforms };
@@ -181,6 +187,7 @@ export async function retryPublish(postId: string, agencyId: string): Promise<Pu
   const scheduledAt = post?.scheduled_at ?? new Date().toISOString();
 
   const failedPlatforms: Platform[] = [];
+  const failureReasons: string[] = [];
 
   for (const job of failedJobs ?? []) {
     const service = PLATFORM_SERVICE[job.platform];
@@ -204,7 +211,10 @@ export async function retryPublish(postId: string, agencyId: string): Promise<Pu
       })
       .eq("id", job.id);
 
-    if (!result.ok) failedPlatforms.push(job.platform);
+    if (!result.ok) {
+      failedPlatforms.push(job.platform);
+      failureReasons.push(`${job.platform}: ${result.errorMessage ?? "onbekende fout"}`);
+    }
   }
 
   // Same "any failure, not just every platform" fix as publishPost() above —
@@ -213,6 +223,7 @@ export async function retryPublish(postId: string, agencyId: string): Promise<Pu
   // 'scheduled'.
   if (failedPlatforms.length > 0) {
     await supabase.from("posts").update({ status: "publish_failed" }).eq("id", postId);
+    await notifyPostFailure(postId, "publish", failureReasons.join("; "));
   } else {
     await supabase.from("posts").update({ status: "scheduled" }).eq("id", postId);
   }

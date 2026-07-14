@@ -10,7 +10,11 @@ export default async function NewAgencyTemplatePage({ params }: { params: Promis
   await requireRole(["super_admin"]);
   const supabase = await createClient();
 
-  const { data: agency } = await supabase.from("agencies").select("id, name").eq("id", id).maybeSingle();
+  const { data: agency } = await supabase
+    .from("agencies")
+    .select("id, name, custom_font_url, custom_font_family")
+    .eq("id", id)
+    .maybeSingle();
   if (!agency) notFound();
 
   const boundAction = createAgencyTemplateAction.bind(null, id);
@@ -23,7 +27,13 @@ export default async function NewAgencyTemplatePage({ params }: { params: Promis
         backHref={`/admin/agencies/${id}`}
         backLabel={agency.name}
       />
-      <TemplateForm action={boundAction} agencyName={agency.name} mode="create" />
+      <TemplateForm
+        action={boundAction}
+        agencyName={agency.name}
+        customFontFamily={agency.custom_font_family ?? undefined}
+        customFontUrl={agency.custom_font_url ?? undefined}
+        mode="create"
+      />
     </div>
   );
 }

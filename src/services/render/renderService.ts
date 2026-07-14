@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { browserRenderService } from "./browserRenderService";
+import { notifyPostFailure } from "@/services/notifications/postFailureNotificationService";
 import type { Database } from "@/types/database";
 
 export interface RenderSlideInput {
@@ -84,6 +85,7 @@ export async function renderPostForScheduling(postId: string, client?: SupabaseC
   } catch (renderError) {
     const message = (renderError as Error).message;
     await supabase.from("posts").update({ status: "render_failed", render_error: message }).eq("id", postId);
+    await notifyPostFailure(postId, "render", message);
     return { ok: false, error: message };
   }
 

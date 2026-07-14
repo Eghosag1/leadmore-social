@@ -3,14 +3,6 @@
 Dingen die we bewust nog niet gebouwd hebben, met de context waarom, zodat we ze
 niet vergeten. Geen einddatum/prioriteit — gewoon een geheugensteun.
 
-## Meldingen bij mislukte posts
-
-Vandaag komt een kantoor een mislukte post (`render_failed`/`publish_failed`)
-enkel tegen als iemand toevallig het kalenderoverzicht of de posts-lijst bekijkt
-— geen enkele proactieve melding. Gekozen richting: **e-mail**, niet enkel een
-in-app banner, net omdat een banner afhankelijk blijft van dat iemand toevallig
-inlogt. Vereist een mailprovider (Resend/Postmark/...) — nog niet gekozen.
-
 ## Facebook-koppeling — model nog eens goed doordenken
 
 Vandaag configureert enkel de platformbeheerder de Meta-koppeling (bewust zo
@@ -40,37 +32,21 @@ gewone OAuth-scherm alsnog betrouwbaar zou laten werken voor zulke pagina's,
 waardoor de partner-stap overbodig wordt. Onbevestigd, niet getest — puur een
 onderzoekspiste.
 
-## Template-versiebeheer
-
-Geen versiegeschiedenis/rollback voor admin-templates — een template bewerken
-overschrijft de vorige versie definitief (met automatische terugval naar
-`draft` tot opnieuw gevalideerd, zie Fase 1). Expliciet uit scope gelaten bij
-de eerste versie van de validatieflow.
-
-## Custom fonts per kantoor/template
-
-Vandaag kan een template-component geen eigen font laden (schrijfcontract laat
-enkel `React`/`Image` toe, geen `import`s — zie CLAUDE.md "Admin-geschreven
-React-templates"), dus templates vallen terug op wat globaal in de app geladen
-is (nu enkel Geist Sans/Mono, `src/app/layout.tsx` + `globals.css`'s
-`@theme`-blok). Ontdekt bij het overzetten van een Figma-ontwerp
-("IvyPresto Headline"/"Agape", beide betaalde fonts) — moest vervangen worden
-door `font-serif`/`font-sans`-benaderingen. Op te lossen op platformniveau,
-niet per template: font-bestand(en) uploaden/registreren (per kantoor of
-globaal), via `next/font/local` laden, en koppelen aan een Tailwind
-`font-*`-utility zodat elke template ‘m gewoon kan gebruiken — geen wijziging
-aan het `new Function`-compileermodel zelf nodig.
-
-## Manier van templates aanmaken herbekijken
+## Manier van templates aanmaken herbekijken — PoC gebouwd, migratie nog niet
 
 De huidige flow (super_admin plakt/schrijft zelf TSX + Tailwind in een
 tekstvak, `TemplateForm`) bleek omslachtig bij het overzetten van een echt
-Figma-ontwerp — handmatig JSX/Tailwind schrijven (of laten genereren en dan
-copy-pasten) per template is trager en foutgevoeliger dan gewenst. Nog te
-bepalen wat de betere aanpak is; uitdrukkelijk **niet** terug naar een
-Canva-achtige drag-and-drop-builder voor het kantoor (blijft uitgesloten, zie
-CLAUDE.md "Productvisie") — dit gaat over hoe de *admin* templates aanmaakt,
-niet het kantoor.
+Figma-ontwerp. Opgelost op architectuurniveau: templates kunnen nu ook als
+echte, git-beheerde `.tsx`-bestanden bestaan (`src/templates/registry.ts`,
+`agency_templates.template_key`) i.p.v. enkel als DB-string — zie CLAUDE.md
+"Admin-geschreven React-templates" en de "Templatearchitectuur"-analyse. Eén
+template is zo overgezet als bewijs, echt getest (Puppeteer-render + geen
+regressie op bestaande DB-string-templates). **Nog niet gedaan**: een
+admin-UI om een kantoor aan een registry-template te koppelen (nu handmatig
+via SQL), de resterende bestaande templates overzetten, en het oude
+`new Function`-compileerpad uiteindelijk verwijderen. Blijft uitdrukkelijk
+**geen** Canva-achtige drag-and-drop-builder voor het kantoor (zie CLAUDE.md
+"Productvisie") — dit gaat over hoe de *admin* templates aanmaakt.
 
 ## Vercel Cron i.p.v. QStash/fire-and-forget, zodra het project naar Pro verhuist
 

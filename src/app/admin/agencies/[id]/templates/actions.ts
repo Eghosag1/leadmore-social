@@ -4,12 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import {
-  archiveAgencyTemplate,
-  createAgencyTemplate,
-  unarchiveAgencyTemplate,
-  updateAgencyTemplate,
-} from "@/services/templates/templateService";
+import { archiveAgencyTemplate, createAgencyTemplate, unarchiveAgencyTemplate, updateAgencyTemplate } from "@/services/templates/templateService";
 import { validateAndPublishTemplate } from "@/services/templates/templateValidationService";
 import type { TemplateConfig } from "@/types/domain";
 
@@ -93,9 +88,10 @@ export interface ValidateTemplateResult {
 
 /** Compiles the template, generates its Tailwind CSS, and test-renders every slide with dummy property data — only on full success does the template become selectable by the agency (see validateAndPublishTemplate). */
 export async function validateAgencyTemplateAction(agencyId: string, templateId: string): Promise<ValidateTemplateResult> {
-  await requireRole(["super_admin"]);
-  const result = await validateAndPublishTemplate(templateId);
+  const current = await requireRole(["super_admin"]);
+  const result = await validateAndPublishTemplate(templateId, current.profile.id);
   revalidatePath(`/admin/agencies/${agencyId}`);
+  revalidatePath(`/admin/agencies/${agencyId}/templates/${templateId}`);
   return result;
 }
 

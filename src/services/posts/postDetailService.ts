@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { reconcilePublishedPosts } from "@/services/posts/publishReconciliationService";
 import { processPendingPost } from "@/services/posts/postQueueService";
+import { notifyPostFailure } from "@/services/notifications/postFailureNotificationService";
 import { buildRawPhotoRenderProps, buildTemplateRenderProps } from "@/lib/template-render";
 import type { PropertyRow } from "@/types/database";
 import type { TemplateConfig, TemplateRenderProps } from "@/types/domain";
@@ -62,6 +63,7 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     await supabase.from("posts").update({ status: "render_failed", render_error: staleError }).eq("id", postId);
     post.status = "render_failed";
     post.render_error = staleError;
+    await notifyPostFailure(postId, "render", staleError);
   }
 
   // Safety net for the fire-and-forget queue trigger in
@@ -88,7 +90,7 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
 
   const [{ data: property }, { data: agency }, { data: slides }, { data: jobs }] = await Promise.all([
     supabase.from("properties").select("*").eq("id", post.property_id).maybeSingle(),
-    supabase.from("agencies").select("name, logo_url").eq("id", agencyId).single(),
+    supabase.from("agencies").select("name, logo_url, custom_font_url, custom_font_family").eq("id", agencyId).single(),
     supabase.from("post_slides").select("*").eq("post_id", postId).order("sort_order"),
     supabase.from("post_jobs").select("platform, status, error_message").eq("post_id", postId),
   ]);
@@ -116,6 +118,8 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
       images: images ?? [],
       config: template.config as unknown as TemplateConfig,
       agencyName: agency?.name ?? "",
+      customFontFamily: agency?.custom_font_family,
+      customFontUrl: agency?.custom_font_url,
       overrides: {
         title: slideText.title,
         description: slideText.description ?? undefined,

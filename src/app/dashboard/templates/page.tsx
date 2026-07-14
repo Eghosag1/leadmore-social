@@ -15,7 +15,7 @@ export default async function TemplatesGalleryPage() {
 
   const [templates, { data: agency }, { data: sampleProperty }] = await Promise.all([
     listActiveAgencyTemplatesForCustomer(agencyId),
-    supabase.from("agencies").select("name, logo_url").eq("id", agencyId).single(),
+    supabase.from("agencies").select("name, logo_url, custom_font_url, custom_font_family").eq("id", agencyId).single(),
     supabase.from("properties").select("*").eq("agency_id", agencyId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
@@ -42,6 +42,8 @@ export default async function TemplatesGalleryPage() {
               images,
               config: template.config,
               agencyName: agency?.name ?? "",
+              customFontFamily: agency?.custom_font_family,
+              customFontUrl: agency?.custom_font_url,
             });
             return (
               <Card key={template.id} className="overflow-hidden py-0">

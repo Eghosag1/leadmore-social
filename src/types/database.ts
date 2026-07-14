@@ -26,6 +26,10 @@ export type AgencyRow = {
   primary_color: string;
   secondary_color: string;
   website_url: string | null;
+  /** Public URL of an uploaded font file (agency-fonts bucket) — used by every template of this agency via the fixed `.font-brand` CSS class. */
+  custom_font_url: string | null;
+  /** CSS font-family name to declare in the @font-face rule — freely chosen, not derived from the file. */
+  custom_font_family: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -122,6 +126,18 @@ export type AgencyTemplateRow = {
   updated_at: string;
 };
 
+/** Snapshot of a component_source template taken at every successful validateAndPublishTemplate() — see templateValidationService.ts. Never created for template_key (git-managed) templates. */
+export type AgencyTemplateVersionRow = {
+  id: string;
+  agency_template_id: string;
+  version: number;
+  component_source: string;
+  slide_count: number;
+  config: Record<string, unknown>;
+  created_at: string;
+  created_by: string | null;
+};
+
 export type PostRow = {
   id: string;
   agency_id: string;
@@ -173,6 +189,7 @@ export type TableName =
   | "properties"
   | "property_images"
   | "agency_templates"
+  | "agency_template_versions"
   | "posts"
   | "post_slides"
   | "post_jobs";
@@ -192,6 +209,7 @@ export interface Database {
       properties: Table<PropertyRow>;
       property_images: Table<PropertyImageRow>;
       agency_templates: Table<AgencyTemplateRow>;
+      agency_template_versions: Table<AgencyTemplateVersionRow>;
       posts: Table<PostRow>;
       post_slides: Table<PostSlideRow>;
       post_jobs: Table<PostJobRow>;

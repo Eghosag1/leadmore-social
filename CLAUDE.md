@@ -49,7 +49,14 @@ uitdrukkelijk **geen Canva-editor en geen drag-and-drop layout builder**.
 - **Supabase**: Postgres database, Auth en Storage. Schema + RLS-policies staan in `supabase/migrations/`. Er is
   geen Supabase CLI/Docker beschikbaar geweest in deze omgeving — migraties zijn plain `.sql`-bestanden, uit te
   voeren via de Supabase SQL editor of `supabase db push` zodra de CLI lokaal beschikbaar is.
-  - `src/lib/supabase/client.ts` — browser client (RLS als ingelogde gebruiker).
+  - `src/lib/supabase/client.ts` — browser client (RLS als ingelogde gebruiker). **Belangrijke val, echt tegengekomen
+    (2026-07-14)**: `src/lib/supabase/env.ts` moet `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` lezen
+    via een **letterlijke** `process.env.NEXT_PUBLIC_X`-expressie, niet via een gedeelde `readEnv(name)`-helper met
+    `process.env[name]` (dynamische key). Next.js' build-time env-inlining voor clientbundels herkent enkel
+    statisch-analyseerbare, letterlijke `process.env.NEXT_PUBLIC_X`-verwijzingen — een dynamische lookup blijft in
+    de browser altijd `undefined`, waardoor elke client-side Storage-upload (`LogoUploader`/`FontUploader`, beide
+    gebruiken deze client rechtstreeks) stil terugviel op de `http://localhost:54321`-fallback en faalde met
+    `ERR_CONNECTION_REFUSED` — pas ontdekt bij het testen van `FontUploader`, maar trof `LogoUploader` al even lang.
   - `src/lib/supabase/server.ts` — server client voor Server Components/Server Actions (RLS als ingelogde gebruiker).
   - `src/lib/supabase/admin.ts` — service-role client (**bypasses RLS**), alleen voor server-only "achtergrond"
     operaties die een echt systeem simuleren: CRM-sync, Meta-scheduling status-updates. Nooit client-side gebruiken.
@@ -166,6 +173,24 @@ CTA-tekst, badge-tekst, zichtbare velden — ingesteld door de admin, niet door 
 bij het aanmaken), maar worden bewust **niet** getoond in het klantdashboard — `listActiveAgencyTemplatesForCustomer`
 haalt enkel de klant-relevante kolommen op.
 
+**Custom fonts — per kantoor, niet per template.** `agencies.custom_font_url`/`custom_font_family`
+(`0012_agency_custom_font.sql`) worden ingesteld op `/admin/agencies/[id]/settings` via `FontUploader.tsx`
+(zelfde upload-patroon als `LogoUploader.tsx`, naar de `agency-fonts`-Storage-bucket). Geldt voor **alle**
+templates van dat kantoor tegelijk, DB-string of git-beheerd — geen per-template instelling. Het font stroomt mee
+in `TemplateRenderProps` (`buildTemplateRenderProps()`, `src/lib/template-render.ts`) en wordt centraal
+geïnjecteerd door `DynamicTemplateRenderer.tsx` als een `@font-face`/`--font-brand`-`<style>`-blok, ongeacht welk
+renderpad. Een template gebruikt het gewoon via de vaste, altijd-beschikbare `.font-brand`-klasse
+(`globals.css`) — géén Tailwind-utility (die kan immers nooit een runtime-geüploade font-URL kennen), gewoon
+plain CSS die al in het globale stylesheet zit.
+
+**Templateversiebeheer — enkel voor `component_source`-templates.** Elke geslaagde
+`validateAndPublishTemplate()` (`src/services/templates/templateValidationService.ts`) slaat een snapshot op in
+`agency_template_versions` (`0013_template_versions.sql`, oplopend versienummer per template). Git-beheerde
+(`template_key`) templates krijgen versiebeheer al gratis via git en slaan dus nooit een snapshot op. In
+`TemplateForm.tsx` (enkel `mode="edit"`) kan de admin op een versie klikken om die terug in de editor te laden
+(`setSource`/`setSlideCount`, zelfde client-side patroon als de starter-knoppen) — dat overschrijft de live
+template pas na opnieuw expliciet opslaan/valideren, nooit meteen.
+
 **Vaste-layout regel:** het kantoor kan de template-broncode **nooit** wijzigen. Bij het maken van een post kan de
 gebruiker enkel: titel/beschrijving op de visual koppelen aan een pandveld naar keuze of handmatig invullen (zie
 "Databinding" hieronder), het bijschrift schrijven, een foto uit de pandfoto's kiezen, het platform kiezen, en
@@ -233,6 +258,28 @@ publicatiestatus later bijwerkt, niet de browser-sessie van de gebruiker. Concre
 `postSchedulerService.ts` die een bestaande `post_jobs`-rij update (`retryPublish`, `reschedulePost`): die
 gebruiken daarvoor expliciet `createAdminClient()`, niet de sessie-client — anders faalt de update stil (geen
 error, gewoon 0 rijen geraakt), wat tijdens het bouwen van `retryPublish` ook echt zo gebeurde.
+
+**Belangrijke correctie (2026-07-14):** `publishPost()`/`retryPublish()` zetten `posts.status = 'publish_failed'`
+op basis van of **minstens één** platform mislukte, niet enkel wanneer **alle** platforms mislukten — de oude
+`alle mislukt`-check liet een gedeeltelijke mislukking (bv. Facebook gelukt, Instagram niet) gewoon op
+`scheduled` staan, waarna `publishReconciliationService.ts` die later stilzwijgend naar `published` zette zodra
+het wél-gelukte platform bevestigd werd (die query filtert enkel op `post_jobs.status = 'scheduled'`, en ziet de
+mislukte job dus nooit). Dezelfde bugklasse zat ook in `instagramSchedulerSweepService.ts`'s
+`updatePostAggregateStatus` en is daar identiek gefixt.
+
+### Meldingen bij mislukte posts
+
+`postFailureNotificationService.ts`'s `notifyPostFailure(postId, "render" | "publish", reason)` stuurt via Resend
+(`src/lib/resend.ts`, kale `fetch()` naar `https://api.resend.com/emails`, geen SDK — zelfde stijl als
+`src/lib/qstash.ts`) een mail naar elke gebruiker van het kantoor zodra een post `render_failed`/`publish_failed`
+wordt — vroeger enkel zichtbaar als iemand toevallig het dashboard bekeek. Aangeroepen op elke plek waar die
+status effectief gezet wordt: `renderService.ts`, de lazy stale-rendering-reconciliatie in
+`postDetailService.ts`, `postSchedulerService.ts`'s `publishPost()`/`retryPublish()`, en
+`instagramSchedulerSweepService.ts`'s `updatePostAggregateStatus`. E-mailadressen komen van `auth.users` (niet
+`profiles`, dat heeft er geen) via `admin.auth.admin.getUserById()` per profiel van het kantoor. Volledig
+best-effort: elke fout (ontbrekende `RESEND_API_KEY`, Resend zelf onbereikbaar, ...) wordt gelogd en geslikt — een
+mislukte melding mag nooit de render-/publiceerflow zelf laten falen. Bewust geen dedupe: een opnieuw mislukte
+retry stuurt gewoon opnieuw een mail.
 
 ### Achtergrond-queue voor renderen
 
@@ -440,7 +487,10 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
    `0009_property_listing_type.sql` (voegt `properties.listing_type` toe — "te koop" vs. "te huur", los van
    `property_type`/`status`) → `0010_instagram_scheduling.sql` (voegt `'publishing'` toe aan `post_status`, de
    claim-status tijdens de Instagram-sweep) → `0011_template_registry_key.sql` (voegt `agency_templates.template_key`
-   toe, nullable — het git-beheerde templatepad, zie "Admin-geschreven React-templates" hierboven).
+   toe, nullable — het git-beheerde templatepad, zie "Admin-geschreven React-templates" hierboven) →
+   `0012_agency_custom_font.sql` (voegt `agencies.custom_font_url`/`custom_font_family` toe + de
+   `agency-fonts`-Storage-bucket) → `0013_template_versions.sql` (nieuwe `agency_template_versions`-tabel voor
+   templateversiebeheer).
 3. `npm run seed` — vult het project met demo-kantoren, panden, templates en posts (idempotent, veilig opnieuw te
    draaien).
 4. `npm run dev`.
@@ -456,6 +506,10 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
    (regio-specifiek, bv. `https://qstash-eu-central-1.upstash.io` — géén vaste URL voor elk account), `QSTASH_TOKEN`,
    `QSTASH_CURRENT_SIGNING_KEY` en `QSTASH_NEXT_SIGNING_KEY`. Zonder deze vars blijft Facebook-scheduling gewoon
    werken; enkel het inplannen van een Instagram-post faalt dan met een duidelijke foutmelding.
+8. Optioneel, enkel nodig voor e-mailmeldingen bij mislukte posts (zie "Meldingen bij mislukte posts" hierboven):
+   gratis account op resend.com → `RESEND_API_KEY` + een geverifieerd verzenddomein voor `RESEND_FROM_EMAIL`.
+   Zonder deze vars blijft de rest van de app gewoon werken; een mislukte post faalt nog steeds correct, er komt
+   enkel geen mail.
 
 **Demo-accounts na het seeden** (wachtwoord `Leadmore123!` voor iedereen, tenzij je `SEED_SUPER_ADMIN_EMAIL`/
 `SEED_SUPER_ADMIN_PASSWORD` in `.env.local` hebt gezet — dat overschrijft enkel het super_admin-account):

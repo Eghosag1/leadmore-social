@@ -10,9 +10,12 @@ export function buildTemplateRenderProps(params: {
   images: Pick<PropertyImageRow, "image_url" | "sort_order">[];
   config: TemplateConfig;
   agencyName: string;
+  /** Agency-level custom font (agencies.custom_font_family/custom_font_url) — not part of TemplateConfig since it's set on the agency's own settings page, not per template. */
+  customFontFamily?: string | null;
+  customFontUrl?: string | null;
   overrides?: { title?: string; description?: string | null; coverImageUrl?: string };
 }): TemplateRenderProps {
-  const { property, images, config, agencyName, overrides } = params;
+  const { property, images, config, agencyName, customFontFamily, customFontUrl, overrides } = params;
   const sortedImages = [...images].sort((a, b) => a.sort_order - b.sort_order).map((image) => image.image_url);
   const orderedImages = overrides?.coverImageUrl
     ? [overrides.coverImageUrl, ...sortedImages.filter((url) => url !== overrides.coverImageUrl)]
@@ -36,6 +39,8 @@ export function buildTemplateRenderProps(params: {
     ctaText: config.brand.ctaText ?? config.defaultTexts?.ctaText,
     status: property.status,
     fields: config.fields,
+    customFontFamily: customFontFamily ?? undefined,
+    customFontUrl: customFontUrl ?? undefined,
   };
 }
 

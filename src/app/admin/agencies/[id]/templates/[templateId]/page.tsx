@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { TemplateForm } from "@/components/admin/TemplateForm";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getAgencyTemplate } from "@/services/templates/templateService";
+import { getAgencyTemplate, listTemplateVersions } from "@/services/templates/templateService";
 import type { TemplateConfig } from "@/types/domain";
 import { updateAgencyTemplateAction } from "../actions";
 
@@ -20,11 +20,13 @@ export default async function AgencyTemplateDetailPage({
   const supabase = await createClient();
 
   const [{ data: agency }, template] = await Promise.all([
-    supabase.from("agencies").select("id, name").eq("id", id).maybeSingle(),
+    supabase.from("agencies").select("id, name, custom_font_url, custom_font_family").eq("id", id).maybeSingle(),
     getAgencyTemplate(templateId),
   ]);
 
   if (!agency || !template || template.agency_id !== id) notFound();
+
+  const versions = await listTemplateVersions(templateId);
 
   const config = template.config as unknown as TemplateConfig;
   const boundAction = updateAgencyTemplateAction.bind(null, id, templateId);
@@ -47,7 +49,10 @@ export default async function AgencyTemplateDetailPage({
       <TemplateForm
         action={boundAction}
         agencyName={agency.name}
+        customFontFamily={agency.custom_font_family ?? undefined}
+        customFontUrl={agency.custom_font_url ?? undefined}
         mode="edit"
+        versions={versions}
         initial={{
           name: template.name,
           description: template.description ?? "",

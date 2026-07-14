@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { AgencyTemplateRow } from "@/types/database";
+import type { AgencyTemplateRow, AgencyTemplateVersionRow } from "@/types/database";
 import type { TemplateConfig } from "@/types/domain";
 
 /** Admin view: every template for one agency, active or not, including billing metadata. */
@@ -163,6 +163,18 @@ export async function unarchiveAgencyTemplate(id: string): Promise<void> {
   const supabase = await createClient();
   const { error } = await supabase.from("agency_templates").update({ status: "published" }).eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+/** Newest first — for the "Versies" list on the template detail page. Only ever populated for component_source templates, see validateAndPublishTemplate. */
+export async function listTemplateVersions(templateId: string): Promise<AgencyTemplateVersionRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("agency_template_versions")
+    .select("*")
+    .eq("agency_template_id", templateId)
+    .order("version", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 
 /**

@@ -12,6 +12,7 @@ import { TEMPLATE_STARTERS } from "@/data/template-starters";
 import { buildTemplateRenderProps } from "@/lib/template-render";
 import { EXAMPLE_PROPERTY, EXAMPLE_PROPERTY_IMAGES } from "@/data/mock/example-property";
 import type { TemplateConfig } from "@/types/domain";
+import type { AgencyTemplateVersionRow } from "@/types/database";
 
 export interface TemplateFormState {
   error: string | null;
@@ -52,13 +53,20 @@ const DEFAULT_INITIAL: TemplateFormInitial = {
 export function TemplateForm({
   action,
   agencyName,
+  customFontFamily,
+  customFontUrl,
   initial,
   mode,
+  versions,
 }: {
   action: (prev: TemplateFormState, formData: FormData) => Promise<TemplateFormState>;
   agencyName: string;
+  customFontFamily?: string;
+  customFontUrl?: string;
   initial?: Partial<TemplateFormInitial>;
   mode: "create" | "edit";
+  /** Version history for this template (edit mode only) — see listTemplateVersions. */
+  versions?: AgencyTemplateVersionRow[];
 }) {
   const values = { ...DEFAULT_INITIAL, ...initial };
   const [state, formAction, isPending] = useActionState(action, { error: null });
@@ -84,8 +92,15 @@ export function TemplateForm({
       },
       defaultTexts: { badgeText: badgeText || undefined },
     };
-    return buildTemplateRenderProps({ property: EXAMPLE_PROPERTY, images: EXAMPLE_PROPERTY_IMAGES, config, agencyName });
-  }, [brandColor, secondaryColor, ctaText, badgeText, agencyName]);
+    return buildTemplateRenderProps({
+      property: EXAMPLE_PROPERTY,
+      images: EXAMPLE_PROPERTY_IMAGES,
+      config,
+      agencyName,
+      customFontFamily,
+      customFontUrl,
+    });
+  }, [brandColor, secondaryColor, ctaText, badgeText, agencyName, customFontFamily, customFontUrl]);
 
   return (
     <form action={formAction} className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -182,6 +197,24 @@ export function TemplateForm({
                 ))}
               </div>
             )}
+            {mode === "edit" && versions && versions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {versions.map((version) => (
+                  <button
+                    key={version.id}
+                    type="button"
+                    onClick={() => {
+                      setSource(version.component_source);
+                      setSlideCount(version.slide_count);
+                    }}
+                    title={new Date(version.created_at).toLocaleString("nl-BE")}
+                    className="rounded-md border border-neutral-200 px-2 py-1 text-xs font-medium text-neutral-600 hover:bg-neutral-50"
+                  >
+                    Versie {version.version}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <textarea
             id="componentSourceEditor"
@@ -195,6 +228,9 @@ export function TemplateForm({
           <p className="text-xs text-muted-foreground">
             Schrijf een normale React-component en sluit af met <code>export default JouwComponent;</code>. Enkel{" "}
             <code>React</code> en next/image&apos;s <code>Image</code> staan ter beschikking — geen andere imports.
+            {mode === "edit" && versions && versions.length > 0 && (
+              <> Klik op een versie hierboven om die terug in de editor te laden — pas na opnieuw opslaan wordt ze live.</>
+            )}
           </p>
         </div>
 

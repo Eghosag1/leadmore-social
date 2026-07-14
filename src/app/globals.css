@@ -128,3 +128,15 @@
     @apply font-sans;
   }
 }
+
+/*
+ * Always-available class for admin templates to opt into an agency's custom
+ * font (set on the agency's own settings page, see FontUploader.tsx). The
+ * actual @font-face + --font-brand value is injected per-render by
+ * DynamicTemplateRenderer.tsx — this is plain CSS, not a Tailwind utility,
+ * since the font itself is a runtime value uploaded per agency, not
+ * something the build-time Tailwind compiler could ever know about.
+ */
+.font-brand {
+  font-family: var(--font-brand, inherit);
+}

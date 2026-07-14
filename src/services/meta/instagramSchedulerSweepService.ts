@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getInstagramToken, publishPhotoNow } from "@/services/meta/instagramPublishingService";
+import { notifyPostFailure } from "@/services/notifications/postFailureNotificationService";
 
 /**
  * The actual "make it happen" half of Instagram scheduling — called by
@@ -67,12 +68,14 @@ async function publishOneDueJob(
   const imageUrl = slides?.[0] ? (slides[0].rendered_image_url ?? slides[0].image_url) : undefined;
   if (!imageUrl) {
     await admin.from("post_jobs").update({ status: "failed", error_message: "Geen foto om te posten." }).eq("id", job.id);
+    await updatePostAggregateStatus(post.id);
     return;
   }
 
   const connection = await getInstagramToken(post.agency_id, admin);
   if ("error" in connection) {
     await admin.from("post_jobs").update({ status: "failed", error_message: connection.error }).eq("id", job.id);
+    await updatePostAggregateStatus(post.id);
     return;
   }
 
@@ -95,15 +98,27 @@ async function publishOneDueJob(
   await updatePostAggregateStatus(post.id);
 }
 
-/** Mirrors the aggregate rollup already used in publishPost()/retryPublish() — flips posts.status once every platform job has resolved. */
+/**
+ * Mirrors the aggregate rollup already used in publishPost()/retryPublish() —
+ * flips posts.status once every platform job has resolved. Checks "any job
+ * failed" before "every job published", same fix as postSchedulerService.ts
+ * (2026-07-14): a post with a published Facebook job and a failed Instagram
+ * job must show publish_failed, not silently stay on whatever it was before
+ * — the old `jobs.every((j) => j.status === "failed")` check only ever
+ * matched when *every* platform failed, so a partial failure here fell
+ * through both branches and updated nothing.
+ */
 async function updatePostAggregateStatus(postId: string): Promise<void> {
   const admin = createAdminClient();
-  const { data: jobs } = await admin.from("post_jobs").select("status").eq("post_id", postId);
+  const { data: jobs } = await admin.from("post_jobs").select("status, error_message, platform").eq("post_id", postId);
   if (!jobs || jobs.length === 0) return;
 
-  if (jobs.every((j) => j.status === "published")) {
-    await admin.from("posts").update({ status: "published" }).eq("id", postId);
-  } else if (jobs.every((j) => j.status === "failed")) {
+  const failedJobs = jobs.filter((j) => j.status === "failed");
+  if (failedJobs.length > 0) {
     await admin.from("posts").update({ status: "publish_failed" }).eq("id", postId);
+    const reason = failedJobs.map((j) => `${j.platform}: ${j.error_message ?? "onbekende fout"}`).join("; ");
+    await notifyPostFailure(postId, "publish", reason);
+  } else if (jobs.every((j) => j.status === "published")) {
+    await admin.from("posts").update({ status: "published" }).eq("id", postId);
   }
 }

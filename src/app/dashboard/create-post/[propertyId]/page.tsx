@@ -32,7 +32,7 @@ export default async function CreatePostPage({
     supabase.from("properties").select("*").eq("agency_id", agencyId).eq("id", propertyId).maybeSingle(),
     supabase.from("property_images").select("*").eq("property_id", propertyId).order("sort_order"),
     listActiveAgencyTemplatesForCustomer(agencyId),
-    supabase.from("agencies").select("name, logo_url").eq("id", agencyId).single(),
+    supabase.from("agencies").select("name, logo_url, custom_font_url, custom_font_family").eq("id", agencyId).single(),
     supabase.from("social_connections").select("status").eq("agency_id", agencyId).eq("provider", "meta").maybeSingle(),
   ]);
 
@@ -45,6 +45,8 @@ export default async function CreatePostPage({
       templates={templates}
       agencyName={agency?.name ?? ""}
       agencyLogo={agency?.logo_url ?? undefined}
+      customFontFamily={agency?.custom_font_family ?? undefined}
+      customFontUrl={agency?.custom_font_url ?? undefined}
       metaConnected={connection?.status === "connected"}
       returnTo={safeReturnTo}
       initialDate={safeDate}

@@ -18,7 +18,7 @@ export default async function AgencyTemplatePreviewPage({
   const supabase = await createClient();
 
   const [{ data: agency }, template, { data: properties }] = await Promise.all([
-    supabase.from("agencies").select("id, name").eq("id", id).maybeSingle(),
+    supabase.from("agencies").select("id, name, custom_font_url, custom_font_family").eq("id", id).maybeSingle(),
     getAgencyTemplate(templateId),
     supabase.from("properties").select("*").eq("agency_id", id).order("created_at", { ascending: false }).limit(20),
   ]);
@@ -56,6 +56,8 @@ export default async function AgencyTemplatePreviewPage({
             type={template.type}
             config={template.config as unknown as TemplateConfig}
             agencyName={agency.name}
+            customFontFamily={agency.custom_font_family ?? undefined}
+            customFontUrl={agency.custom_font_url ?? undefined}
             properties={propertyOptions}
           />
         </CardContent>

@@ -57,6 +57,9 @@ export interface TemplateRenderProps {
   ctaText?: string;
   status: PropertyStatus;
   fields: TemplateFieldVisibility;
+  /** Agency-level custom font (set on the agency's own settings page, not per template) — see DynamicTemplateRenderer.tsx's `.font-brand` injection. */
+  customFontFamily?: string;
+  customFontUrl?: string;
 }
 
 // --- CRM mock boundary -----------------------------------------------------

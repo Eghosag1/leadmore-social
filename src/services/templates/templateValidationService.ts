@@ -24,8 +24,13 @@ export interface TemplateValidationResult {
  * compiled_css_hash — an admin experimenting with a broken edit shouldn't be
  * able to accidentally clobber the last known-good render output of an
  * already-published template.
+ *
+ * `createdBy` (a profiles.id, optional) is only used to attribute the
+ * version snapshot this function takes on success — see the bottom of this
+ * function. Only component_source templates get a snapshot; template_key
+ * (git-managed) templates already have version history via git.
  */
-export async function validateAndPublishTemplate(templateId: string): Promise<TemplateValidationResult> {
+export async function validateAndPublishTemplate(templateId: string, createdBy?: string): Promise<TemplateValidationResult> {
   const supabase = await createClient();
 
   const { data: template } = await supabase.from("agency_templates").select("*").eq("id", templateId).maybeSingle();
@@ -83,5 +88,30 @@ export async function validateAndPublishTemplate(templateId: string): Promise<Te
     .eq("id", templateId);
 
   if (publishError) return fail(publishError.message);
+
+  if (!template.template_key) {
+    const { data: latest } = await supabase
+      .from("agency_template_versions")
+      .select("version")
+      .eq("agency_template_id", templateId)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextVersion = (latest?.version ?? 0) + 1;
+
+    // Best-effort — a failed snapshot insert shouldn't undo an otherwise
+    // successful publish (the template is already correctly `published`
+    // above); it would just mean this one version is missing from history.
+    const { error: versionError } = await supabase.from("agency_template_versions").insert({
+      agency_template_id: templateId,
+      version: nextVersion,
+      component_source: template.component_source,
+      slide_count: template.slide_count,
+      config: template.config,
+      created_by: createdBy ?? null,
+    });
+    if (versionError) console.error(`Kon templateversie niet opslaan voor ${templateId}:`, versionError.message);
+  }
+
   return { ok: true };
 }

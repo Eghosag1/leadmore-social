@@ -31,6 +31,8 @@ export function CreatePostForm({
   templates,
   agencyName,
   agencyLogo,
+  customFontFamily,
+  customFontUrl,
   metaConnected,
   returnTo,
   initialDate,
@@ -40,6 +42,8 @@ export function CreatePostForm({
   templates: AgencyTemplateForCustomer[];
   agencyName: string;
   agencyLogo?: string;
+  customFontFamily?: string;
+  customFontUrl?: string;
   metaConnected: boolean;
   /** Where "Terug" should go — forwarded from the page that linked here (properties list vs. property detail). */
   returnTo?: string;
@@ -130,6 +134,8 @@ export function CreatePostForm({
           images,
           config: selectedTemplate.config,
           agencyName,
+          customFontFamily,
+          customFontUrl,
           overrides: { title, description, coverImageUrl: coverImageUrl ?? undefined },
         })
       : buildRawPhotoRenderProps({ property, images: ownImages, agencyName });
