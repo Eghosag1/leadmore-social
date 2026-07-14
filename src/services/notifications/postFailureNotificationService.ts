@@ -60,7 +60,15 @@ export async function notifyPostFailure(postId: string, stage: "render" | "publi
       <p><a href="${postUrl}">Bekijk de post</a></p>
     `;
 
-    await Promise.all(emails.map((to) => sendEmail({ to, subject, html })));
+    // allSettled, not all — one recipient's send failing (e.g. Resend's
+    // sandbox mode rejecting a non-verified address before a domain is
+    // verified) must not swallow/obscure the others' successful delivery.
+    // Confirmed for real: a batch with one valid and one sandbox-rejected
+    // recipient genuinely delivers to the valid one regardless.
+    const results = await Promise.allSettled(emails.map((to) => sendEmail({ to, subject, html })));
+    results.forEach((result, i) => {
+      if (result.status === "rejected") console.error(`notifyPostFailure(${postId}, ${stage}) mislukte voor ${emails[i]}:`, result.reason);
+    });
   } catch (error) {
     console.error(`notifyPostFailure(${postId}, ${stage}) mislukte:`, error);
   }
