@@ -65,7 +65,8 @@ export async function createPost(input: CreatePostInput): Promise<{ postId: stri
 export interface PublishPostInput {
   postId: string;
   agencyId: string;
-  scheduledAt: string;
+  /** Null means "nu posten" — publish immediately instead of scheduling for later, see the note on the `service.schedule()` call below. */
+  scheduledAt: string | null;
   caption: string;
 }
 
@@ -106,9 +107,12 @@ export async function publishPost(input: PublishPostInput, client?: SupabaseClie
     .order("sort_order");
   const imageUrls = (slides ?? []).map((s) => s.rendered_image_url ?? s.image_url);
 
+  // "publishing" (not "scheduled") when there's nothing to wait for — "nu
+  // posten" means every platform's schedule() call below publishes for
+  // real, synchronously, not just registers a future publish time.
   await supabase
     .from("posts")
-    .update({ status: "scheduled", scheduled_at: input.scheduledAt })
+    .update({ status: input.scheduledAt ? "scheduled" : "publishing", scheduled_at: input.scheduledAt })
     .eq("id", input.postId);
 
   const failedPlatforms: Platform[] = [];
@@ -122,6 +126,11 @@ export async function publishPost(input: PublishPostInput, client?: SupabaseClie
         platform,
         caption: input.caption,
         imageUrls,
+        // Passing `null` through as-is is what makes "nu posten" work —
+        // facebookPublishingService omits scheduled_publish_time entirely
+        // (Facebook then publishes on the spot) and instagramPublishingService
+        // calls publishPhotoNow() directly instead of scheduling a QStash
+        // wake-up. See PublishPostInput's doc comment above.
         scheduledAt: input.scheduledAt,
       },
       supabase,
@@ -130,7 +139,7 @@ export async function publishPost(input: PublishPostInput, client?: SupabaseClie
     const { error: jobError } = await supabase.from("post_jobs").insert({
       post_id: input.postId,
       platform,
-      status: result.ok ? "scheduled" : "failed",
+      status: result.ok ? (input.scheduledAt ? "scheduled" : "published") : "failed",
       scheduled_at: input.scheduledAt,
       meta_object_id: result.metaObjectId ?? null,
       error_message: result.errorMessage ?? null,
@@ -155,6 +164,11 @@ export async function publishPost(input: PublishPostInput, client?: SupabaseClie
   if (failedPlatforms.length > 0) {
     await supabase.from("posts").update({ status: "publish_failed" }).eq("id", input.postId);
     await notifyPostFailure(input.postId, "publish", failureReasons.join("; "));
+  } else if (!input.scheduledAt) {
+    // "Nu posten", every platform succeeded — every post_jobs row is already
+    // "published" above, so the post itself is fully done too, not merely
+    // "scheduled" (there's nothing left pending to wait for).
+    await supabase.from("posts").update({ status: "published" }).eq("id", input.postId);
   }
 
   return { ok: failedPlatforms.length === 0, failedPlatforms };
@@ -184,7 +198,11 @@ export async function retryPublish(postId: string, agencyId: string): Promise<Pu
     supabase.from("post_slides").select("image_url, rendered_image_url").eq("post_id", postId).order("sort_order"),
   ]);
   const imageUrls = (slides ?? []).map((s) => s.rendered_image_url ?? s.image_url);
-  const scheduledAt = post?.scheduled_at ?? new Date().toISOString();
+  // A null scheduled_at means the original post was "nu posten" — preserve
+  // that as-is on retry too (same reasoning as postQueueService.ts: a
+  // synthesized "now" timestamp would take the scheduled-post path, which
+  // Facebook rejects for being under its 10-minute minimum).
+  const scheduledAt = post?.scheduled_at ?? null;
 
   const failedPlatforms: Platform[] = [];
   const failureReasons: string[] = [];
@@ -205,7 +223,7 @@ export async function retryPublish(postId: string, agencyId: string): Promise<Pu
     await admin
       .from("post_jobs")
       .update({
-        status: result.ok ? "scheduled" : "failed",
+        status: result.ok ? (scheduledAt ? "scheduled" : "published") : "failed",
         meta_object_id: result.metaObjectId ?? null,
         error_message: result.errorMessage ?? null,
       })
@@ -225,7 +243,7 @@ export async function retryPublish(postId: string, agencyId: string): Promise<Pu
     await supabase.from("posts").update({ status: "publish_failed" }).eq("id", postId);
     await notifyPostFailure(postId, "publish", failureReasons.join("; "));
   } else {
-    await supabase.from("posts").update({ status: "scheduled" }).eq("id", postId);
+    await supabase.from("posts").update({ status: scheduledAt ? "scheduled" : "published" }).eq("id", postId);
   }
 
   return { ok: failedPlatforms.length === 0, failedPlatforms };

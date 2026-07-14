@@ -35,7 +35,13 @@ export async function processPendingPost(postId: string, client: SupabaseClient<
     {
       postId,
       agencyId: claimed.agency_id,
-      scheduledAt: claimed.scheduled_at ?? new Date().toISOString(),
+      // Preserve `null` as-is for "nu posten" — do NOT fall back to
+      // `new Date().toISOString()` here. A real `null` tells
+      // facebookPublishingService/instagramPublishingService to publish
+      // immediately; a timestamp that merely happens to be close to "now"
+      // would instead take the scheduled-post path, which Facebook rejects
+      // for being under its 10-minute minimum.
+      scheduledAt: claimed.scheduled_at,
       caption: claimed.caption,
     },
     client,

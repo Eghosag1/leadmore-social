@@ -64,6 +64,8 @@ export function CreatePostForm({
 
   const isOwnCarousel = mode === "own" && selectedType === "carousel";
 
+  const [postNow, setPostNow] = useState(false);
+
   const [titleSource, setTitleSource] = useState<FieldSourceValue>("title");
   const [title, setTitle] = useState(property.title);
   const [descriptionSource, setDescriptionSource] = useState<FieldSourceValue>("description");
@@ -366,17 +368,52 @@ export function CreatePostForm({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">6. Datum en uur</CardTitle>
+              <CardTitle className="text-base">6. Wanneer</CardTitle>
             </CardHeader>
-            <CardContent className="flex gap-3">
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Label htmlFor="scheduledDate">Datum</Label>
-                <Input id="scheduledDate" name="scheduledDate" type="date" defaultValue={initialDate} required />
+            <CardContent className="flex flex-col gap-3">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPostNow(false)}
+                  className={cn(
+                    "rounded-md border px-4 py-2 text-sm font-medium transition-colors",
+                    !postNow
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50",
+                  )}
+                >
+                  Inplannen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPostNow(true)}
+                  className={cn(
+                    "rounded-md border px-4 py-2 text-sm font-medium transition-colors",
+                    postNow
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50",
+                  )}
+                >
+                  Nu posten
+                </button>
               </div>
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Label htmlFor="scheduledTime">Uur</Label>
-                <Input id="scheduledTime" name="scheduledTime" type="time" required />
-              </div>
+              {postNow ? (
+                <p className="text-xs text-muted-foreground">
+                  De post wordt onmiddellijk gepubliceerd zodra hij klaar is met renderen, geen wachttijd.
+                </p>
+              ) : (
+                <div className="flex gap-3">
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Label htmlFor="scheduledDate">Datum</Label>
+                    <Input id="scheduledDate" name="scheduledDate" type="date" defaultValue={initialDate} required />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Label htmlFor="scheduledTime">Uur</Label>
+                    <Input id="scheduledTime" name="scheduledTime" type="time" required />
+                  </div>
+                </div>
+              )}
+              <input type="hidden" name="postNow" value={postNow ? "on" : ""} />
             </CardContent>
           </Card>
 
@@ -388,7 +425,7 @@ export function CreatePostForm({
           )}
 
           <Button type="submit" size="lg" disabled={isPending || !metaConnected || !hasValidSelection} className="w-full">
-            {isPending ? "Bezig met inplannen..." : "Post inplannen"}
+            {isPending ? "Bezig..." : postNow ? "Nu posten" : "Post inplannen"}
           </Button>
         </div>
 

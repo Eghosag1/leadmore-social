@@ -31,19 +31,30 @@ export async function createAndSchedulePostAction(
   const coverImageUrl = String(formData.get("coverImageUrl") ?? "");
   const ownPhotoUrls = formData.getAll("ownPhotoUrls").map(String);
   const platforms = formData.getAll("platforms").map(String) as Platform[];
+  const postNow = formData.get("postNow") === "on";
   const scheduledDate = String(formData.get("scheduledDate") ?? "");
   const scheduledTime = String(formData.get("scheduledTime") ?? "");
 
   if (platforms.length === 0) {
     return { error: "Kies minstens één platform (Facebook of Instagram)." };
   }
-  if (!scheduledDate || !scheduledTime) {
-    return { error: "Kies een datum en uur om de post in te plannen." };
-  }
 
-  const scheduledAt = parseScheduledAt(scheduledDate, scheduledTime);
-  if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() < Date.now()) {
-    return { error: "Kies een datum en uur in de toekomst." };
+  // "Nu posten" deliberately skips scheduling entirely — scheduledAt stays
+  // `null` all the way down to facebookPublishingService/
+  // instagramPublishingService, which both treat `null` as "publish
+  // immediately" (see postSchedulerService.publishPost). A near-future
+  // timestamp wouldn't work for this: Facebook rejects scheduled_publish_time
+  // under 10 minutes out, so "now" has to be a real `null`, not just "close
+  // to now".
+  let scheduledAt: Date | null = null;
+  if (!postNow) {
+    if (!scheduledDate || !scheduledTime) {
+      return { error: "Kies een datum en uur om de post in te plannen." };
+    }
+    scheduledAt = parseScheduledAt(scheduledDate, scheduledTime);
+    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() < Date.now()) {
+      return { error: "Kies een datum en uur in de toekomst." };
+    }
   }
 
   const description = String(formData.get("description") ?? "").trim() || null;
@@ -129,7 +140,7 @@ export async function createAndSchedulePostAction(
   // race against the serverless function being frozen/torn down right after
   // the response is sent. If it still never lands, postDetailService.ts's
   // lazy safety-net picks the post up the next time anyone views it.
-  await supabase.from("posts").update({ status: "pending_render", scheduled_at: scheduledAt.toISOString() }).eq("id", postId);
+  await supabase.from("posts").update({ status: "pending_render", scheduled_at: scheduledAt?.toISOString() ?? null }).eq("id", postId);
 
   const token = signQueueToken(postId);
   const queueUrl = siteUrl();

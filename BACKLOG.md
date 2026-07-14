@@ -154,6 +154,18 @@ dashboard**: een app-icoon (1024×1024) uploaden, een screencast per
 permissie opnemen (voorgestelde opname-flow staat bij de teksten), en
 effectief indienen. Doorlooptijd doorgaans 2-4 weken per indiening.
 
+## Geen stale-check voor de "publishing"-tussenstatus
+
+`postDetailService.ts` heeft een lazy stale-check die een post die te lang op
+`rendering` blijft staan (>3 min, aborted request) automatisch naar
+`render_failed` zet. Diezelfde bescherming bestaat niet voor de
+`publishing`-status — noch de al-langer-bestaande Instagram-sweep-claim
+(`instagramSchedulerSweepService.ts`), noch de nieuwe "nu posten"-flow
+(`postSchedulerService.publishPost()`, zie hierboven) hebben zo'n vangnet.
+In de praktijk lost `publishing` normaal binnen enkele seconden op (gewoon
+een paar synchrone Graph API-calls), maar een afgebroken serverless-functie
+zou een post daar in theorie voor altijd op kunnen laten staan.
+
 ## Vercel Cron i.p.v. QStash/fire-and-forget, zodra het project naar Pro verhuist
 
 Twee plekken gebruiken vandaag bewust geen Vercel Cron omdat het Hobby-plan

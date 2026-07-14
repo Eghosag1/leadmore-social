@@ -235,13 +235,27 @@ Flow (`src/components/dashboard/CreatePostForm.tsx` → `src/app/dashboard/creat
    `null` (eigen foto's) renderen die mocks `RawImageSlide` (`src/components/templates/RawImageSlide.tsx`) in
    plaats van `DynamicTemplateRenderer`.
 8. Kiest Facebook en/of Instagram.
-9. Kiest datum/uur — of vertrekt vanaf een klik op een dag in het kalenderoverzicht (`/dashboard`,
-   `PostCalendar.tsx`), die dan al voorgeselecteerd staat (via `?date=` doorgegeven t/m de pandkeuze).
+9. Kiest datum/uur, **of "Nu posten"** — of vertrekt vanaf een klik op een dag in het kalenderoverzicht
+   (`/dashboard`, `PostCalendar.tsx`), die dan al voorgeselecteerd staat (via `?date=` doorgegeven t/m de
+   pandkeuze).
 10. `postSchedulerService.createPost()` — maakt `posts` (status `draft`, `agency_template_id` null bij eigen
     foto's) + `post_slides` aan (1 slide per gekozen foto).
 11. `createAndSchedulePostAction` zet `posts.status = 'pending_render'` + `scheduled_at`, en redirect meteen naar
     `/dashboard/scheduled?created=1` (`PostCreatedToast` toont een "wordt verwerkt"-melding) — het eigenlijke
     renderen/publiceren gebeurt niet meer in dezelfde request (zie "Achtergrond-queue voor renderen" hieronder).
+
+**"Nu posten"** (toegevoegd 2026-07-14, `CreatePostForm.tsx`'s toggle naast de datum/uur-kiezer): `scheduled_at`
+wordt dan bewust `null` in plaats van een toekomstig tijdstip, en dat `null` stroomt letterlijk door tot in
+`facebookPublishingService`/`instagramPublishingService` — Facebook publiceert automatisch onmiddellijk als
+`scheduled_publish_time` ontbreekt, en `instagramPublishingService.schedule()` had toch al een
+directe-publish-fallback (`publishPhotoNow()`) voor wanneer er geen `scheduledAt` is. **Cruciale valkuil, echt
+tegengekomen**: `null` moet een echte `null` blijven, nooit vervangen worden door een `new Date().toISOString()`
+("dichtbij nu")-fallback — Facebook weigert `scheduled_publish_time` binnen de 10 minuten, dus zo'n fallback zou
+"nu posten" alsnog laten falen. Precies dat gebeurde oorspronkelijk in zowel `postQueueService.processPendingPost()`
+als `postSchedulerService.retryPublish()` (beide hadden een `?? new Date().toISOString()`-fallback voor een
+ontbrekend `scheduled_at`) — beide gefixt om `null` gewoon door te geven. Bij "nu posten" wordt
+`post_jobs.status`/`posts.status` bij succes meteen `published` gezet (niet `scheduled`), want er is niets meer om
+op te wachten.
 
 **Statusflow:** `draft → pending_render → rendering → rendered → scheduled → published`, met twee foutstatussen
 die elk hun eigen herstelactie hebben: `render_failed` (`RenderFailedActions.tsx` — "Opnieuw proberen" of "Toch
