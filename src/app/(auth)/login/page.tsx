@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoginForm } from "@/components/shared/LoginForm";
 import { getCurrentUser } from "@/lib/auth";
@@ -25,6 +26,15 @@ export default async function LoginPage() {
             <LoginForm />
           </CardContent>
         </Card>
+        <p className="text-center text-xs text-muted-foreground">
+          <Link href="/privacy" className="hover:underline">
+            Privacyverklaring
+          </Link>
+          {" · "}
+          <Link href="/data-deletion" className="hover:underline">
+            Gegevensverwijdering
+          </Link>
+        </p>
       </div>
     </div>
   );

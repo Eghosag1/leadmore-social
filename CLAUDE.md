@@ -381,14 +381,16 @@ server-side hangt hiervan af) én een read-only veld met Leadmore's Business Man
 `META_BUSINESS_MANAGER_ID`, `src/lib/meta/env.ts`) met een kopieerknop, zodat de admin die niet uit het hoofd hoeft
 te kennen bij het doorgeven aan een kantoor.
 
-**Onderzocht maar nog niet afgerond: Meta Business Verification.** Als Leadmore's Business Manager-account
-Verification doorloopt (Business Settings → Security Centre → "Start Verification"), is de hypothese dat de
-gewone, eenvoudige OAuth-flow (personal-flow hierboven) ook voor Business-Portfolio-Pagina's betrouwbaar zou gaan
-werken, wat deze hele Business Manager-omweg voor toekomstige kantoren overbodig zou maken — nog niet bevestigd.
-Vereisten: Business Manager idealiter 30-60+ dagen oud, 2FA aan, een app gekoppeld (✅ al in orde), en minstens één
-advertentie-account met een schone betaalgeschiedenis (nog te checken of dit aanwezig is). Vereist verder officiële
-bedrijfsdocumenten (naam/adres exact gelijk aan de Business Manager's juridische gegevens) — een bedrijfsbeslissing,
-geen coderingstaak. Doorlooptijd doorgaans 3-14 werkdagen.
+**Meta Business Verification doorlopen, hypothese ontkracht (2026-07-14).** Leadmore's Business Manager-account is
+inmiddels geverifieerd (Business Settings → Security Centre → "Start Verification"). De hypothese was dat dit de
+gewone, eenvoudige OAuth-flow (personal-flow hierboven) ook voor Business-Portfolio-Pagina's betrouwbaar zou laten
+werken, wat de Business Manager-omweg voor toekomstige kantoren overbodig zou maken. **Getest met een echte
+Business-Portfolio-Pagina na Verification — nog steeds dezelfde fout** ("Dit Facebook-account beheert geen enkele
+Pagina (of enkel Pagina's binnen een Business Portfolio — probeer een standalone Pagina)"). Business Verification
+lost het `/me/accounts`-surfacing-probleem dus **niet** op — de Business Manager/System User-koppelmethode
+hieronder blijft de permanente, noodzakelijke weg voor elk kantoor waarvan de Pagina in een Business Portfolio zit
+(in de praktijk vrijwel elk kantoor met Instagram gekoppeld, zie hierboven). Verification blijft wel relevant als
+voorwaarde voor Meta App Review (zie BACKLOG.md), dat is een apart traject.
 
 Tokens worden versleuteld opgeslagen (`src/lib/token-encryption.ts`, AES-256-GCM) — ook het handmatige token-veld
 in `MetaConnectionForm` gaat nu door `encryptToken()`; het veld toont nooit een opgeslagen token terug (leeg laten
