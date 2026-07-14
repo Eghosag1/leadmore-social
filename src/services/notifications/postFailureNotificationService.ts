@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/resend";
 import { siteUrl } from "@/lib/site-url";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 
 const STAGE_LABEL = {
   render: "renderen",
@@ -54,9 +55,13 @@ export async function notifyPostFailure(postId: string, stage: "render" | "publi
     const postTitle = property?.title ?? (post.caption || "een post");
     const postUrl = `${siteUrl()}/dashboard/posts/${postId}`;
     const subject = `${STAGE_LABEL[stage]} mislukt — ${postTitle}`;
+    // reason arrives as a raw technical string (Meta Graph API JSON/English
+    // messages, infra-specific errors) — translated to a short, actionable
+    // Dutch message here since this email goes to agency users, not admins
+    // (who can still see the raw text on /admin/errors).
     const html = `
       <p>Het ${STAGE_LABEL[stage]} van een post voor <strong>${postTitle}</strong> is mislukt${agency?.name ? ` (${agency.name})` : ""}.</p>
-      <p><strong>Reden:</strong> ${reason}</p>
+      <p><strong>Reden:</strong> ${friendlyErrorMessage(reason)}</p>
       <p><a href="${postUrl}">Bekijk de post</a></p>
     `;
 

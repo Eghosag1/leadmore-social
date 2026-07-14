@@ -35,6 +35,12 @@ export type PostStatus = (typeof POST_STATUSES)[number];
 export const POST_TYPES = ["single", "carousel"] as const;
 export type PostType = (typeof POST_TYPES)[number];
 
+// 'fixed' = the constant 1080x1350 (4:5) render canvas; 'original' = canvas
+// height derived from the source photo's own aspect ratio. Distinct from
+// PostFormat ('feed'/'story', above) — unrelated concept, different table.
+export const POST_CANVAS_MODES = ["fixed", "original"] as const;
+export type PostCanvasMode = (typeof POST_CANVAS_MODES)[number];
+
 export const PLATFORMS = ["facebook", "instagram"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 

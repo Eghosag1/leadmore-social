@@ -21,6 +21,7 @@ export function PhonePreview({
   agencyLogo,
   slideIndex,
   onSlideIndexChange,
+  canvasHeight,
 }: {
   /** Null in "eigen foto's" mode — renders the raw photo instead of a compiled template. */
   componentSource: string | null;
@@ -33,6 +34,8 @@ export function PhonePreview({
   agencyLogo?: string;
   slideIndex: number;
   onSlideIndexChange: (index: number) => void;
+  /** Set when canvasMode === 'original' — overrides the default 1350 (4:5) render canvas height. */
+  canvasHeight?: number | null;
 }) {
   const [platform, setPlatform] = useState<PreviewPlatform>("instagram");
   const isCarousel = slideCount > 1;
@@ -91,6 +94,7 @@ export function PhonePreview({
                 agencyLogo={agencyLogo}
                 slideIndex={slideIndex}
                 onSlideIndexChange={onSlideIndexChange}
+                canvasHeight={canvasHeight}
               />
             ) : (
               <FacebookPostMock
@@ -103,6 +107,7 @@ export function PhonePreview({
                 agencyLogo={agencyLogo}
                 slideIndex={slideIndex}
                 onSlideIndexChange={onSlideIndexChange}
+                canvasHeight={canvasHeight}
               />
             )}
           </div>

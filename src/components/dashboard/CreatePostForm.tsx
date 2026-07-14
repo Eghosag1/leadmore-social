@@ -14,10 +14,11 @@ import { FieldBindingControl } from "@/components/dashboard/FieldBindingControl"
 import { cn } from "@/lib/utils";
 import { buildRawPhotoRenderProps, buildTemplateRenderProps } from "@/lib/template-render";
 import { MANUAL_SOURCE, resolvePropertyField, type FieldSourceValue } from "@/lib/field-binding";
+import { computeClampedCanvasHeight } from "@/lib/canvas-format";
 import { createAndSchedulePostAction, type CreatePostState } from "@/app/dashboard/create-post/[propertyId]/actions";
 import type { PropertyImageRow, PropertyRow } from "@/types/database";
 import type { AgencyTemplateForCustomer } from "@/services/templates/templateService";
-import type { Platform, TemplateType } from "@/types/enums";
+import type { Platform, PostCanvasMode, TemplateType } from "@/types/enums";
 
 const TYPE_LABELS: Record<TemplateType, string> = { single: "Single post", carousel: "Carousel" };
 const PLATFORM_LABELS: Record<Platform, string> = { facebook: "Facebook", instagram: "Instagram" };
@@ -106,6 +107,14 @@ export function CreatePostForm({
   const [platforms, setPlatforms] = useState<Set<Platform>>(new Set());
   const [slideIndex, setSlideIndex] = useState(0);
 
+  const [canvasMode, setCanvasMode] = useState<PostCanvasMode>("fixed");
+  const [imageDimensions, setImageDimensions] = useState<Record<string, { width: number; height: number }>>({});
+  const coverDims = coverImageUrl ? imageDimensions[coverImageUrl] : undefined;
+  const computedCanvasHeight =
+    mode === "template" && canvasMode === "original" && coverDims
+      ? computeClampedCanvasHeight(coverDims.width, coverDims.height)
+      : null;
+
   const boundAction = createAndSchedulePostAction.bind(null, property.id);
   const [state, formAction, isPending] = useActionState(boundAction, initialState);
 
@@ -121,6 +130,7 @@ export function CreatePostForm({
     }
     setSlideIndex(0);
     setSelectedPhotoUrls([]);
+    setCanvasMode("fixed");
   }
 
   function toggleOwnPhoto(url: string) {
@@ -146,7 +156,9 @@ export function CreatePostForm({
   const previewTemplateKey = mode === "template" && selectedTemplate ? selectedTemplate.template_key : null;
   const previewSlideCount = mode === "template" && selectedTemplate ? selectedTemplate.slide_count : Math.max(ownImages.length, 1);
 
-  const hasValidSelection = mode === "template" ? !!selectedTemplate && !!coverImageUrl : isOwnCarousel ? selectedPhotoUrls.length > 0 : !!coverImageUrl;
+  const hasValidSelection =
+    (mode === "template" ? !!selectedTemplate && !!coverImageUrl : isOwnCarousel ? selectedPhotoUrls.length > 0 : !!coverImageUrl) &&
+    !(mode === "template" && canvasMode === "original" && !computedCanvasHeight);
 
   function togglePlatform(platform: Platform) {
     setPlatforms((prev) => {
@@ -178,6 +190,10 @@ export function CreatePostForm({
         <input type="hidden" name="titleSource" value={titleSource} />
         <input type="hidden" name="description" value={description} />
         <input type="hidden" name="descriptionSource" value={descriptionSource} />
+        <input type="hidden" name="canvasMode" value={mode === "template" ? canvasMode : "fixed"} />
+        {mode === "template" && canvasMode === "original" && computedCanvasHeight && (
+          <input type="hidden" name="canvasHeight" value={computedCanvasHeight} />
+        )}
 
         <div className="flex flex-col gap-6">
           <Card>
@@ -238,6 +254,7 @@ export function CreatePostForm({
                   setSelectedTemplateId(null);
                   setSlideIndex(0);
                   setSelectedPhotoUrls([]);
+                  setCanvasMode("fixed");
                 }}
                 className={cn(
                   "flex flex-col items-start gap-1 rounded-lg border border-dashed p-3 text-left text-sm transition-colors",
@@ -316,7 +333,20 @@ export function CreatePostForm({
                         selected ? "border-neutral-900" : "border-transparent",
                       )}
                     >
-                      <Image src={image.image_url} alt="" fill sizes="120px" className="object-cover" />
+                      <Image
+                        src={image.image_url}
+                        alt=""
+                        fill
+                        sizes="120px"
+                        className="object-cover"
+                        onLoad={(e) => {
+                          const img = e.currentTarget;
+                          if (!img.naturalWidth || !img.naturalHeight) return;
+                          setImageDimensions((prev) =>
+                            prev[image.image_url] ? prev : { ...prev, [image.image_url]: { width: img.naturalWidth, height: img.naturalHeight } },
+                          );
+                        }}
+                      />
                       {orderIndex >= 0 && (
                         <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-[11px] font-semibold text-white">
                           {orderIndex + 1}
@@ -329,9 +359,50 @@ export function CreatePostForm({
             </CardContent>
           </Card>
 
+          {mode === "template" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">5. Formaat</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCanvasMode("fixed")}
+                    className={cn(
+                      "rounded-md border px-4 py-2 text-sm font-medium transition-colors",
+                      canvasMode === "fixed"
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50",
+                    )}
+                  >
+                    Standaard (4:5)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCanvasMode("original")}
+                    className={cn(
+                      "rounded-md border px-4 py-2 text-sm font-medium transition-colors",
+                      canvasMode === "original"
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50",
+                    )}
+                  >
+                    Origineel formaat
+                  </button>
+                </div>
+                {canvasMode === "original" && (
+                  <p className="text-xs text-muted-foreground">
+                    {computedCanvasHeight ? `Canvas wordt ongeveer 1080×${computedCanvasHeight}px, zonder bijsnijden.` : "Foto wordt gemeten..."}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">5. Platform</CardTitle>
+              <CardTitle className="text-base">6. Platform</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {!metaConnected && (
@@ -368,7 +439,7 @@ export function CreatePostForm({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">6. Wanneer</CardTitle>
+              <CardTitle className="text-base">7. Wanneer</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <div className="flex gap-2">
@@ -441,6 +512,7 @@ export function CreatePostForm({
               agencyLogo={agencyLogo}
               slideIndex={slideIndex}
               onSlideIndexChange={setSlideIndex}
+              canvasHeight={computedCanvasHeight}
             />
           ) : (
             <p className="text-sm text-muted-foreground">Kies een template of foto om een preview te zien.</p>

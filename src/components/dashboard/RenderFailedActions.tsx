@@ -6,6 +6,7 @@ import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { retryRenderAction, useOriginalPhotoAction } from "@/app/dashboard/posts/[id]/actions";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 
 /**
  * Shown when a post is `render_failed` — the render pipeline no longer
@@ -39,7 +40,7 @@ export function RenderFailedActions({ postId, renderError }: { postId: string; r
     <Alert variant="destructive">
       <AlertTriangle className="h-4 w-4" />
       <AlertDescription>
-        <p className="mb-3">Renderen van deze post is mislukt{renderError ? `: ${renderError}` : "."}</p>
+        <p className="mb-3">Renderen van deze post is mislukt: {friendlyErrorMessage(renderError)}</p>
         <div className="flex gap-2">
           <Button size="sm" disabled={isPending} onClick={handleRetry}>
             {isPending && pendingAction === "retry" ? "Bezig..." : "Opnieuw proberen"}

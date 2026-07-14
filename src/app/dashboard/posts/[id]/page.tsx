@@ -37,6 +37,7 @@ export default async function PostDetailPage({
         propertyTitle={data.propertyTitle}
         componentSource={data.componentSource}
         templateKey={data.templateKey}
+        canvasHeight={data.canvasMode === "original" ? data.canvasHeight : null}
         slideCount={data.slideCount}
         previewData={data.previewData}
         agencyName={data.agencyName}

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/format";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { reconcilePublishedPosts } from "@/services/posts/publishReconciliationService";
 import type { PostJobRow, PostRow } from "@/types/database";
 import type { Platform, PostStatus } from "@/types/enums";
@@ -18,6 +19,7 @@ const PLATFORM_LABEL: Record<Platform, string> = { facebook: "FB", instagram: "I
 
 // Mirrors PostDetailClient's canEdit — these statuses still allow editing caption/date.
 const EDITABLE_STATUSES: PostStatus[] = ["draft", "ready", "rendered", "scheduled", "render_failed", "publish_failed"];
+const FAILED_STATUSES: PostStatus[] = ["render_failed", "publish_failed", "failed"];
 
 export default async function PostsPage({ searchParams }: { searchParams: Promise<{ created?: string }> }) {
   const { created } = await searchParams;
@@ -53,7 +55,6 @@ export default async function PostsPage({ searchParams }: { searchParams: Promis
     jobsByPost.set(job.post_id, [...(jobsByPost.get(job.post_id) ?? []), job]);
   }
 
-  const FAILED_STATUSES: PostStatus[] = ["render_failed", "publish_failed", "failed"];
   const publishedPosts = posts?.filter((p) => p.status === "published") ?? [];
   const failedPosts = posts?.filter((p) => FAILED_STATUSES.includes(p.status)) ?? [];
   const scheduledPosts = posts?.filter((p) => p.status !== "published" && !FAILED_STATUSES.includes(p.status)) ?? [];
@@ -141,7 +142,7 @@ function PostsTable({
                   {postJobs.map((job) => (
                     <span
                       key={job.platform}
-                      title={job.error_message ?? undefined}
+                      title={job.error_message ? friendlyErrorMessage(job.error_message) : undefined}
                       className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-600"
                     >
                       {PLATFORM_LABEL[job.platform]}
@@ -155,7 +156,11 @@ function PostsTable({
               </TableCell>
               <TableCell className="text-right">
                 <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/posts/${post.id}`} />}>
-                  {EDITABLE_STATUSES.includes(post.status) ? "Bewerken" : "Bekijken"}
+                  {/* Failed posts open the same detail page as any other post — same per-platform status
+                      breakdown, plus both "Bewerken" and "Opnieuw proberen" there — but "Bekijken" is the
+                      honest label from this list: the primary reason to click through is to see what went
+                      wrong, not to edit fields. */}
+                  {FAILED_STATUSES.includes(post.status) ? "Bekijken" : EDITABLE_STATUSES.includes(post.status) ? "Bewerken" : "Bekijken"}
                 </Button>
               </TableCell>
             </TableRow>

@@ -52,6 +52,7 @@ export default async function AgencyTemplatePreviewPage({
         <CardContent className="pt-6">
           <TemplatePreviewClient
             componentSource={template.component_source}
+            templateKey={template.template_key}
             slideCount={template.slide_count}
             type={template.type}
             config={template.config as unknown as TemplateConfig}

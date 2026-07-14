@@ -6,6 +6,7 @@ import { AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { retryPublishAction } from "@/app/dashboard/posts/[id]/actions";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 import type { Platform, PostStatus } from "@/types/enums";
 
 const PLATFORM_LABEL: Record<Platform, string> = { facebook: "Facebook", instagram: "Instagram" };
@@ -27,7 +28,7 @@ export function PublishFailedActions({
   const [isPending, startTransition] = useTransition();
   const errors = jobs
     .filter((job) => job.status === "failed" && job.error_message)
-    .map((job) => `${PLATFORM_LABEL[job.platform]}: ${job.error_message}`)
+    .map((job) => `${PLATFORM_LABEL[job.platform]}: ${friendlyErrorMessage(job.error_message)}`)
     .join(" — ");
 
   function handleRetry() {

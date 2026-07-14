@@ -47,8 +47,13 @@ uitdrukkelijk **geen Canva-editor en geen drag-and-drop layout builder**.
   breaking changes (o.a. `params`/`searchParams` zijn altijd `Promise`, en `middleware.ts` heet nu `proxy.ts` met
   een `proxy()` export — zie `src/proxy.ts`).
 - **Supabase**: Postgres database, Auth en Storage. Schema + RLS-policies staan in `supabase/migrations/`. Er is
-  geen Supabase CLI/Docker beschikbaar geweest in deze omgeving — migraties zijn plain `.sql`-bestanden, uit te
-  voeren via de Supabase SQL editor of `supabase db push` zodra de CLI lokaal beschikbaar is.
+  geen Supabase CLI/Docker beschikbaar geweest in deze omgeving — migraties zijn plain `.sql`-bestanden. Twee
+  manieren om ze effectief toe te passen: handmatig plakken in de Supabase SQL editor, **of** rechtstreeks via
+  `scripts/run-migration.ts` (`npx tsx scripts/run-migration.ts supabase/migrations/000X_naam.sql`) — een klein
+  script dat met `pg` rechtstreeks verbindt via `SUPABASE_DB_URL` (`.env.local`, een platte Postgres-connectiestring,
+  apart van de Supabase API-keys). Niet idempotent (`create type`/`add column` falen luid bij een tweede run, met
+  opzet — zelfde gedrag als tweemaal dezelfde SQL in de editor plakken), dus bij twijfel of een migratie al liep
+  eerst checken (bv. `select column_name from information_schema.columns where table_name = 'posts'`).
   - `src/lib/supabase/client.ts` — browser client (RLS als ingelogde gebruiker). **Belangrijke val, echt tegengekomen
     (2026-07-14)**: `src/lib/supabase/env.ts` moet `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` lezen
     via een **letterlijke** `process.env.NEXT_PUBLIC_X`-expressie, niet via een gedeelde `readEnv(name)`-helper met
@@ -112,6 +117,34 @@ Agency-gebruikers kunnen **nooit**: nieuwe templates maken, layouts aanpassen, t
 Meta/CRM-koppeling van hun kantoor configureren, andere kantoren zien, of admin-functies gebruiken. Dit wordt
 zowel in de UI verborgen als in RLS afgedwongen (alleen `super_admin` heeft INSERT/UPDATE/DELETE op
 `agency_templates`, en sinds `0004` ook exclusief schrijftoegang tot `social_connections`).
+
+### Gebruikersbeheer en authenticatie
+
+Een `super_admin` beheert kantoorstaff vanaf `/admin/agencies/[id]` (`AgencyUsersCard.tsx`): de lijst van
+bestaande profielen (naam, rol, e-mail — e-mail via `admin.auth.admin.getUserById`, want `profiles` heeft zelf
+geen e-mailkolom, die leeft op `auth.users`), een toevoegformulier, en een verwijderknop per gebruiker.
+`inviteAgencyUserAction` (`src/app/admin/agencies/actions.ts`) genereert een willekeurig tijdelijk wachtwoord
+(`crypto.randomBytes`), maakt de gebruiker aan via `admin.auth.admin.createUser({ email_confirm: true })` + een
+`profiles`-insert, en toont dat wachtwoord eenmalig in een dialoog met kopieerknop — geen uitnodigingsmail nodig
+(dat zou Supabase's eigen mailer-config vereisen, een aparte afhankelijkheid). De nieuwe gebruiker zet zelf een
+eigen wachtwoord via de gewone "wachtwoord vergeten"-flow. `removeAgencyUserAction` is
+`admin.auth.admin.deleteUser(userId)`, zelfde patroon als `deleteAgencyAction`.
+
+Wachtwoord-reset (`/forgot-password` → `/reset-password`) is standaard Supabase Auth. De aanvraag zelf loopt
+bewust via een **server action** (`requestPasswordResetAction`, `src/lib/auth-actions.ts`), niet een rechtstreekse
+client-side `supabase.auth.resetPasswordForEmail()`-call — enkel server-side is er een IP te lezen (`next/headers`)
+om de rate limit hieronder op toe te passen. Toont altijd dezelfde "als er een account bestaat..."-bevestiging,
+ongeacht of het adres echt bestaat (anti-enumeratie). `/reset-password` zelf blijft client-side
+(`supabase.auth.updateUser({ password })`) — de recovery-sessie die Supabase's e-maillink meegeeft wordt door
+`@supabase/ssr`'s browserclient automatisch herkend, geen server-actie nodig voor die stap.
+
+**Rate limiting** (`src/lib/rate-limit.ts`): een in-memory, IP-gekeyde sliding-window-teller (`Map<string,
+number[]>`, IP via `headers().get("x-forwarded-for")`), toegepast op `signInAction` en
+`requestPasswordResetAction` (elk 5 pogingen/5 minuten). Bewust **niet** Upstash-Redis-backed voor v1 — dat zou nu
+een nieuw extern account vereisen; in-memory is per-instance (niet gedeeld tussen meerdere Vercel-instanties, reset
+bij een cold start) en dus een eerste verdedigingslinie, geen waterdichte bescherming. Een
+`@upstash/ratelimit`-versie (zelfde Upstash-account als de al-bestaande QStash-koppeling) is een genoteerde latere
+upgrade, zie `BACKLOG.md`.
 
 ## Template businessmodel
 
@@ -212,6 +245,38 @@ titel, locatie, beschrijving, prijs, type, slaapkamers, badkamers, oppervlakte, 
 `resolvePropertyField()` zet de gekozen bron om naar de uiteindelijke tekst; welke bron gekozen werd, wordt mee
 opgeslagen in `post_slides.text_content` (`titleSource`/`descriptionSource`) voor traceerbaarheid — er is geen
 aparte tabel voor nodig.
+
+### Canvas-formaat per post — "Standaard (4:5)" vs "Origineel formaat"
+
+Elke gerenderde post stond tot `0014_post_canvas_mode.sql` vast op een 1080x1350-canvas (4:5), hardcoded op vijf
+plekken buiten de templates zelf. Bij een template kan de gebruiker nu kiezen (stap "5. Formaat", enkel zichtbaar
+bij `mode === "template"` in `CreatePostForm.tsx`) tussen dat standaardformaat en "Origineel formaat": het canvas
+volgt dan de brontfoto's eigen beeldverhouding, zonder bijsnijden. **Geen enkele template moest hiervoor aangepast
+worden** — alle templates (starters én de git-beheerde `wuustwezel-single.tsx`) positioneren overlays al
+hoogte-relatief (Flexbox/percentages, `AutoSizeText`) met een full-bleed `object-cover`-achtergrondfoto; wanneer de
+buitenste wrapper exact de foto's eigen verhouding krijgt, snijdt `object-cover` wiskundig niets af. De
+vaste-canvas-aanname zat uitsluitend *buiten* de templates: `ScaledTemplateCanvas.tsx`'s `NATIVE_HEIGHT`, de
+Puppeteer-`defaultViewport`, en de `render-slide`-pagina's wrapper-`<div>` — die drie zijn nu allemaal `canvas_mode`-
+bewust. `templateValidationService.ts`/`render-template`-pagina (templatevalidatie, geen specifieke post/foto) en
+`TemplateDefinition`/`registry.ts`'s literal `1080`/`1350`-types blijven **bewust ongewijzigd**: validatie
+certificeert de code tegen één vaste referentie-canvas, en aangezien templates al hoogte-relatief zijn bewijst dat
+ook correctheid op een andere runtime-hoogte.
+
+`property_images` slaat geen breedte/hoogte op — de brontfoto's natuurlijke afmetingen worden client-side gemeten
+via de `onLoad`-handler van de al-geladen thumbnail (`naturalWidth`/`naturalHeight`, gratis, geen nieuwe
+dependency) en eenmalig opgeslagen op de **post** (`canvas_height`, niet per foto — een carrousel-met-template
+hergebruikt toch al 1 foto per slide). Instagram's Content Publishing API vereist een beeldverhouding tussen 4:5 en
+1.91:1; bij vaste breedte 1080px komt dat neer op een hoogte tussen 565 en 1350px. `src/lib/canvas-format.ts` klemt
+dit zowel client-side (`computeClampedCanvasHeight`, voor de live preview) als server-side
+(`clampCanvasHeight` in `createAndSchedulePostAction`, nooit de client-waarde blindelings vertrouwen) —
+laatstgenoemde is een bereik-check, geen her-meting, want er is geen image-decode-dependency om de echte foto
+server-side te herverifiëren.
+
+"Eigen foto's"-posts (geen template) krijgen bewust **geen** `canvas_mode`-keuze: `browserRenderService.renderSlide`
+slaat Puppeteer daar toch al volledig over en publiceert de brontfoto letterlijk, dus die zijn al "origineel
+formaat" zonder dat er iets voor gebouwd moest worden. De enige bijhorende fix was cosmetisch:
+`RawImageSlide.tsx` toonde voorheen een hardcoded `aspect-square`-preview die niet overeenkwam met wat er echt
+gepubliceerd werd — toont nu de foto's gemeten werkelijke verhouding.
 
 ## Post-lifecycle en scheduling
 
@@ -317,6 +382,14 @@ In plaats daarvan:
    `pending_render` staat wanneer de detailpagina bekeken wordt (fire-and-forget-trigger nooit aangekomen), roept
    die pagina zelf `processPendingPost` aan met de gewone sessie-client. Bewust **niet** toegevoegd aan de
    lijst-/kalenderpagina's — die mogen niet enkel door bekeken te worden al zwaar renderwerk starten.
+5. Zelfde lazy-reconciliatie-idee, twee losstaande stale-checks in dezelfde functie: een post die te lang
+   (>3 min) op `rendering` blijft staan (afgebroken request, crash buiten `browserRenderService`'s eigen
+   try/catch) springt naar `render_failed`; een post die te lang (>3 min) op `publishing` blijft staan (de
+   "nu posten"-tussenstatus uit `postSchedulerService.publishPost()`) springt naar `publish_failed`. Beide
+   drempels ruim boven wat een gezonde run nodig heeft (respectievelijk de render-pipeline's eigen 2×15s-retrybudget
+   en een handvol synchrone Graph API-calls), dus geen normale wachttijd. Geldt niet voor de aparte, korter-levende
+   `post_jobs`-niveau "publishing"-claim tijdens de Instagram-sweep (`instagramSchedulerSweepService.ts`) — die
+   heeft al zijn eigen conditionele claim-guard.
 
 `renderPostForScheduling()` en `publishPost()` (en de `MetaPublishingService`-interface-methodes
 `schedule`/`reschedule`/`checkPublishStatus`) accepteren daarom een **optionele** Supabase-client-parameter: de
@@ -328,8 +401,8 @@ expliciet `createAdminClient()` door omdat er geen sessie is.
 | Service | Nu | Later |
 |---|---|---|
 | `crmMockService` (`src/services/crm/`) | Leest `src/data/mock/properties.ts`, `syncAgencyPropertiesFromCrm()` schrijft naar `properties`/`property_images` | Vervang de implementatie van de `CrmService`-interface door een echte provider (Whise, Immoweb, ...); de sync-functie en het datamodel blijven ongewijzigd |
-| `facebookPublishingService` (`src/services/meta/`) | **Echt** — roept de Graph API rechtstreeks aan (zie subsectie hieronder) | Carousel/multi-foto Facebook-posts (`attached_media`) — vandaag wordt enkel de cover-foto gepost, ook voor carousel-posts |
-| `instagramPublishingService` (`src/services/meta/`) | **Echt** — zie "Instagram-scheduling" hieronder | Carousel/multi-foto Instagram-posts — zelfde beperking als Facebook, enkel `imageUrls[0]` |
+| `facebookPublishingService` (`src/services/meta/`) | **Echt**, inclusief carrousel/multi-foto-posts (`attached_media`, zie hieronder) — roept de Graph API rechtstreeks aan | — |
+| `instagramPublishingService` (`src/services/meta/`) | **Echt**, inclusief carrousel/multi-foto-posts (`CAROUSEL`-container, zie "Instagram-scheduling" hieronder) | — |
 | `metaAuthService` (`src/services/meta/metaAuthService.ts`) | **Echt**, voor zowel Facebook als Instagram (authorization URL + volledige token exchange, inclusief Instagram-scopes) | — |
 | CRM-configuratie | Admin vult `provider`/`config` rechtstreeks in via `CrmConnectionForm` op `/admin/agencies/[id]/settings` | CRM-config-velden worden providerspecifiek zodra een echte CRM-integratie gekozen is |
 
@@ -412,6 +485,13 @@ in `MetaConnectionForm` gaat nu door `encryptToken()`; het veld toont nooit een 
 het Page-token en post naar `POST /{page-id}/photos` met `published=false` + `scheduled_publish_time` — Facebook
 plant de post zelf in, er is geen eigen achtergrond-job voor nodig (in tegenstelling tot Instagram, zie hieronder).
 
+**Carrousels (2026-07-14)**: `createScheduledPost` (voorheen `createScheduledPhotoPost`) vertakt op
+`imageUrls.length`. Bij 1 foto ongewijzigd het directe `/photos`-pad. Bij >1 foto: elke foto wordt eerst
+ongepubliceerd geüpload (`POST /{page-id}/photos?published=false&url=<url>`, parallel via `Promise.all`, enkel om
+een `media_fbid` te krijgen — verschijnt zelf nooit los op de Pagina), en dan één `POST /{page-id}/feed` met
+`attached_media=[{"media_fbid":"..."},...]` + dezelfde `published`/`scheduled_publish_time`-logica als vandaag.
+`schedule()` en `reschedule()` geven nu het volledige `request.imageUrls` door i.p.v. enkel `imageUrls[0]`.
+
 ### Instagram-scheduling — echte publicatie via een eigen QStash-scheduler
 
 Instagram's Content Publishing API kent geen `scheduled_publish_time`-equivalent — `media_publish` publiceert
@@ -436,6 +516,23 @@ twee-staps flow (`POST /{ig-id}/media` → `POST /{ig-id}/media_publish`), dan `
 het echte IG-media-id. Waarom **niet** de container meteen bij het inplannen aanmaken: Instagram media-containers
 zijn niet oneindig geldig, en een post die dagen vooruit ingepland wordt zou dan een verlopen container tegenkomen
 op het eigenlijke publicatiemoment.
+
+**Carrousels (2026-07-14)**: `publishPhotoNow` neemt nu `imageUrls: string[]` i.p.v. één `imageUrl`. Bij 1 foto
+ongewijzigd het directe container→publish-pad. Bij >1 foto: per foto een `is_carousel_item=true`-container
+(`POST /{ig-id}/media`), **parallel** aangemaakt én parallel gepolld via `waitForContainerReady` — belangrijk voor
+het gedeelde 60s Hobby-plan-tijdsbudget van de sweep, sequentieel zou bij 4+ foto's dat budget kunnen
+overschrijden. Dan één ouder-container (`media_type=CAROUSEL`, `children=<id1,id2,...>`), zelf ook gepolld, en pas
+dan `media_publish` met die ouder-container-id. `instagramSchedulerSweepService.ts` geeft nu alle slides door, niet
+enkel `slides?.[0]`.
+
+**Echte carrousel-test, echte bug gevonden en gefixt (2026-07-14)**: een live 2-foto-carrousel via "nu posten" —
+Facebook lukte, Instagram faalde met `(#9004) Media ID is not available`, ondanks dat `waitForContainerReady` het
+ouder-`CAROUSEL`-container vooraf als `FINISHED` had gezien. Verklaring: dat ouder-container heeft zelf geen
+afbeelding om te verwerken (enkel `children`-referenties), dus Meta zet `status_code` daar vrijwel meteen op
+`FINISHED` — geen betrouwbaar signaal dat `media_publish` ook effectief zal lukken, exact dezelfde raceconditie als
+bij losse foto's, maar niet volledig afgedekt door enkel de vooraf-poll. `publishContainer()` retryt nu tot 4x
+(2s ertussen) specifiek op Graph API-foutcode `9004`, i.p.v. enkel op de vooraf-check te vertrouwen — geldt voor
+zowel het losse-foto- als het carrousel-publiceerpad (gedeelde functie).
 
 **Belangrijk gevolg voor "Bewerken" (nieuwe datum/uur)**: `postSchedulerService.reschedulePost()` sloeg vroeger elke
 job zonder `meta_object_id` gewoon over (correct voor Facebook, waar dat altijd "mislukt" betekent) — voor
@@ -489,7 +586,8 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
 
 1. `cp .env.local.example .env.local` en vul een Supabase-project in (URL, publishable/anon key, secret/service
    role key — te vinden onder Project Settings → API Keys).
-2. Voer de migraties in `supabase/migrations/` **in volgorde** uit tegen dat project (SQL editor of Supabase CLI):
+2. Voer de migraties in `supabase/migrations/` **in volgorde** uit tegen dat project (SQL editor, `scripts/run-migration.ts`,
+   of Supabase CLI):
    `0001_init.sql` → `0002_storage.sql` → `0003_grants.sql` (nodig omdat sommige nieuwe Supabase-projecten geen
    standaard tabelrechten meer geven aan `anon`/`authenticated`/`service_role` voor tabellen die je zelf via SQL
    aanmaakt — zonder deze migratie krijg je `permission denied for table ...` zodra `npm run seed` draait) →
@@ -506,7 +604,8 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
    toe, nullable — het git-beheerde templatepad, zie "Admin-geschreven React-templates" hierboven) →
    `0012_agency_custom_font.sql` (voegt `agencies.custom_font_url`/`custom_font_family` toe + de
    `agency-fonts`-Storage-bucket) → `0013_template_versions.sql` (nieuwe `agency_template_versions`-tabel voor
-   templateversiebeheer).
+   templateversiebeheer) → `0014_post_canvas_mode.sql` (voegt `posts.canvas_mode`/`canvas_height` toe, zie
+   "Canvas-formaat per post" hieronder).
 3. `npm run seed` — vult het project met demo-kantoren, panden, templates en posts (idempotent, veilig opnieuw te
    draaien).
 4. `npm run dev`.

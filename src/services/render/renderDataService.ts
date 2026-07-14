@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { buildTemplateRenderProps } from "@/lib/template-render";
 import { EXAMPLE_PROPERTY, EXAMPLE_PROPERTY_IMAGES } from "@/data/mock/example-property";
 import type { TemplateConfig, TemplateRenderProps } from "@/types/domain";
+import type { PostCanvasMode } from "@/types/enums";
 
 export interface SlideRenderData {
   /** Null for "eigen foto's" posts — nothing to render, callers should skip the browser step entirely. */
@@ -12,6 +13,9 @@ export interface SlideRenderData {
   previewData: TemplateRenderProps;
   /** Server-compiled CSS already persisted on the template row (see templateValidationService), if it was ever validated. Null for templates saved before validation existed, and always null for templateKey-sourced templates (their CSS comes from the app's normal build, not runtime compilation). */
   compiledCss: string | null;
+  /** 'fixed' = the constant 1080x1350 canvas; 'original' = derive the render wrapper's height from canvasHeight. Real-post path only — TemplateValidationRenderData deliberately has no equivalent, template validation always certifies the one standard canvas. */
+  canvasMode: PostCanvasMode;
+  canvasHeight: number | null;
 }
 
 /**
@@ -61,6 +65,8 @@ export async function getSlideRenderData(postId: string): Promise<SlideRenderDat
     templateKey: template.template_key,
     previewData,
     compiledCss: template.compiled_css,
+    canvasMode: post.canvas_mode,
+    canvasHeight: post.canvas_height,
   };
 }
 

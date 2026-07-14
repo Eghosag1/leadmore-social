@@ -41,17 +41,68 @@ async function getPageToken(
   }
 }
 
-async function createScheduledPhotoPost(params: {
+/** Uploads one photo unpublished, purely to get a media_fbid for attached_media — never appears on the Page on its own. */
+async function uploadUnpublishedPhoto(params: { facebookPageId: string; pageToken: string; imageUrl: string }): Promise<{ mediaFbid: string } | { error: string }> {
+  try {
+    const body = new URLSearchParams({
+      url: params.imageUrl,
+      published: "false",
+      access_token: params.pageToken,
+    });
+    const response = await fetch(`${GRAPH_BASE}/${params.facebookPageId}/photos`, { method: "POST", body });
+    const result = await response.json();
+    if (!response.ok) return { error: result?.error?.message ?? `Facebook API-fout (${response.status})` };
+    return { mediaFbid: result.id };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Onbekende fout bij het uploaden van een foto." };
+  }
+}
+
+async function createScheduledPost(params: {
   facebookPageId: string;
   pageToken: string;
-  imageUrl: string;
+  imageUrls: string[];
   caption: string;
   scheduledAt: string | null;
 }): Promise<MetaSchedulingResult> {
   try {
+    // Single photo: the plain /photos endpoint already both uploads and
+    // creates the Page post in one call, so keep that direct path.
+    if (params.imageUrls.length <= 1) {
+      const body = new URLSearchParams({
+        url: params.imageUrls[0],
+        caption: params.caption,
+        access_token: params.pageToken,
+      });
+
+      if (params.scheduledAt) {
+        const publishTime = Math.floor(new Date(params.scheduledAt).getTime() / 1000);
+        body.set("published", "false");
+        body.set("scheduled_publish_time", String(publishTime));
+      }
+
+      const response = await fetch(`${GRAPH_BASE}/${params.facebookPageId}/photos`, { method: "POST", body });
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { ok: false, errorMessage: result?.error?.message ?? `Facebook API-fout (${response.status})` };
+      }
+
+      return { ok: true, metaObjectId: result.post_id ?? result.id };
+    }
+
+    // Multi-photo: upload each photo unpublished in parallel to get
+    // media_fbids, then attach them all to a single /feed post.
+    const uploads = await Promise.all(
+      params.imageUrls.map((imageUrl) => uploadUnpublishedPhoto({ facebookPageId: params.facebookPageId, pageToken: params.pageToken, imageUrl })),
+    );
+    const failedUpload = uploads.find((upload) => "error" in upload) as { error: string } | undefined;
+    if (failedUpload) return { ok: false, errorMessage: failedUpload.error };
+    const mediaFbids = uploads.map((upload) => (upload as { mediaFbid: string }).mediaFbid);
+
     const body = new URLSearchParams({
-      url: params.imageUrl,
-      caption: params.caption,
+      message: params.caption,
+      attached_media: JSON.stringify(mediaFbids.map((mediaFbid) => ({ media_fbid: mediaFbid }))),
       access_token: params.pageToken,
     });
 
@@ -61,43 +112,31 @@ async function createScheduledPhotoPost(params: {
       body.set("scheduled_publish_time", String(publishTime));
     }
 
-    const response = await fetch(`${GRAPH_BASE}/${params.facebookPageId}/photos`, {
-      method: "POST",
-      body,
-    });
+    const response = await fetch(`${GRAPH_BASE}/${params.facebookPageId}/feed`, { method: "POST", body });
     const result = await response.json();
 
     if (!response.ok) {
       return { ok: false, errorMessage: result?.error?.message ?? `Facebook API-fout (${response.status})` };
     }
 
-    return { ok: true, metaObjectId: result.post_id ?? result.id };
+    return { ok: true, metaObjectId: result.id };
   } catch (error) {
     return { ok: false, errorMessage: error instanceof Error ? error.message : "Onbekende fout bij Facebook-publicatie." };
   }
 }
 
-/**
- * Real Facebook Graph API integration for single-image posts.
- *
- * Not yet in scope: carousel/multi-photo Facebook posts (would need
- * uploading each photo unpublished to get photo ids, then POST /{page-id}/feed
- * with attached_media: [{media_fbid}, ...]) — every post today publishes
- * imageUrls[0] only, which covers single posts and reuses the cover photo
- * for carousel posts exactly like the rest of the app already does.
- */
+/** Real Facebook Graph API integration, both single-image posts and multi-photo carousels via attached_media. */
 export const facebookPublishingService: MetaPublishingService = {
   async schedule(request: MetaSchedulingRequest, client?: SupabaseClient<Database>): Promise<MetaSchedulingResult> {
     const connection = await getPageToken(request.agencyId, client);
     if ("error" in connection) return { ok: false, errorMessage: connection.error };
 
-    const imageUrl = request.imageUrls[0];
-    if (!imageUrl) return { ok: false, errorMessage: "Geen foto om te posten." };
+    if (request.imageUrls.length === 0) return { ok: false, errorMessage: "Geen foto om te posten." };
 
-    return createScheduledPhotoPost({
+    return createScheduledPost({
       facebookPageId: connection.facebookPageId,
       pageToken: connection.pageToken,
-      imageUrl,
+      imageUrls: request.imageUrls,
       caption: request.caption,
       scheduledAt: request.scheduledAt,
     });
@@ -115,8 +154,7 @@ export const facebookPublishingService: MetaPublishingService = {
     const connection = await getPageToken(request.agencyId, client);
     if ("error" in connection) return { ok: false, errorMessage: connection.error };
 
-    const imageUrl = request.imageUrls[0];
-    if (!imageUrl) return { ok: false, errorMessage: "Geen foto om te posten." };
+    if (request.imageUrls.length === 0) return { ok: false, errorMessage: "Geen foto om te posten." };
 
     try {
       const deleteResponse = await fetch(`${GRAPH_BASE}/${request.metaObjectId}?access_token=${encodeURIComponent(connection.pageToken)}`, {
@@ -130,10 +168,10 @@ export const facebookPublishingService: MetaPublishingService = {
       return { ok: false, errorMessage: error instanceof Error ? error.message : "Onbekende fout bij verwijderen van de oude post." };
     }
 
-    return createScheduledPhotoPost({
+    return createScheduledPost({
       facebookPageId: connection.facebookPageId,
       pageToken: connection.pageToken,
-      imageUrl,
+      imageUrls: request.imageUrls,
       caption: request.caption,
       scheduledAt: request.scheduledAt,
     });

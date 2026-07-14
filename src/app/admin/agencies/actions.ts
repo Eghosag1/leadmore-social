@@ -1,5 +1,6 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth";
@@ -256,4 +257,72 @@ export async function updateAgencyCrmConnectionAction(
   revalidatePath(`/admin/agencies/${agencyId}`);
   revalidatePath(`/admin/agencies/${agencyId}/settings`);
   return { error: null };
+}
+
+export interface InviteAgencyUserState {
+  error: string | null;
+  /** Shown once, right after creation — never persisted or fetchable again, same "copy it now" pattern as CopyMetaLinkButton. */
+  tempPassword: string | null;
+}
+
+function generateTempPassword(): string {
+  return randomBytes(9).toString("base64url"); // 12 chars, no /+=  to keep it easy to copy/paste
+}
+
+/**
+ * Creates a first login for someone at this agency — there's no self-serve
+ * signup, only a platformbeheerder can do this (consistent with CRM/Meta/
+ * template configuration, which agencies never touch themselves either, see
+ * CLAUDE.md "Rollen en permissies"). No invite email: Supabase's own mailer
+ * is a separate, unverified dependency in this environment, so instead we
+ * generate a temporary password and show it once for the admin to relay
+ * manually — the new user then sets their own real password via "wachtwoord
+ * vergeten" (src/app/(auth)/forgot-password).
+ */
+export async function inviteAgencyUserAction(
+  agencyId: string,
+  _prev: InviteAgencyUserState,
+  formData: FormData,
+): Promise<InviteAgencyUserState> {
+  await requireRole(["super_admin"]);
+
+  const fullName = String(formData.get("fullName") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const role = String(formData.get("role") ?? "agency_user") as "agency_admin" | "agency_user";
+
+  if (!fullName || !email) return { error: "Vul een naam en e-mailadres in.", tempPassword: null };
+
+  const admin = createAdminClient();
+  const tempPassword = generateTempPassword();
+
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password: tempPassword,
+    email_confirm: true,
+    user_metadata: { full_name: fullName },
+  });
+  if (error || !data.user) return { error: error?.message ?? "Kon gebruiker niet aanmaken.", tempPassword: null };
+
+  const { error: profileError } = await admin.from("profiles").insert({
+    user_id: data.user.id,
+    agency_id: agencyId,
+    full_name: fullName,
+    role,
+  });
+  if (profileError) {
+    // Roll back the auth user so a failed profile insert doesn't leave an orphaned login with no agency access.
+    await admin.auth.admin.deleteUser(data.user.id);
+    return { error: profileError.message, tempPassword: null };
+  }
+
+  revalidatePath(`/admin/agencies/${agencyId}`);
+  return { error: null, tempPassword };
+}
+
+/** Revokes login and removes the profile — same admin.auth.admin.deleteUser cascade as deleteAgencyAction above. */
+export async function removeAgencyUserAction(agencyId: string, userId: string): Promise<void> {
+  await requireRole(["super_admin"]);
+  const admin = createAdminClient();
+  await admin.auth.admin.deleteUser(userId);
+  revalidatePath(`/admin/agencies/${agencyId}`);
 }

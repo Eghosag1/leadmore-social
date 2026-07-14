@@ -15,6 +15,7 @@ import { PublishFailedActions } from "@/components/dashboard/PublishFailedAction
 import { FieldBindingControl } from "@/components/dashboard/FieldBindingControl";
 import { PostStatusBadge } from "@/components/shared/StatusBadge";
 import { MANUAL_SOURCE, resolvePropertyField, type FieldSourceValue } from "@/lib/field-binding";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { updatePostAction, type UpdatePostState } from "@/app/dashboard/posts/[id]/actions";
 import type { PropertyRow } from "@/types/database";
 import type { TemplateRenderProps } from "@/types/domain";
@@ -32,6 +33,7 @@ export function PostDetailClient({
   propertyTitle,
   componentSource,
   templateKey,
+  canvasHeight,
   slideCount,
   previewData,
   agencyName,
@@ -49,6 +51,7 @@ export function PostDetailClient({
   propertyTitle: string;
   componentSource: string | null;
   templateKey?: string | null;
+  canvasHeight?: number | null;
   slideCount: number;
   previewData: TemplateRenderProps;
   agencyName: string;
@@ -60,9 +63,21 @@ export function PostDetailClient({
   const [captionSource, setCaptionSource] = useState<FieldSourceValue>(MANUAL_SOURCE);
   const [caption, setCaption] = useState(initialCaption);
   const [slideIndex, setSlideIndex] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
   const boundAction = updatePostAction.bind(null, postId);
   const [state, formAction, isPending] = useActionState(boundAction, { error: null } as UpdatePostState);
   const { dateValue, timeValue } = formatDateInputs(scheduledAt);
+
+  // Collapse the form back to the "Bewerken" button after a successful save.
+  // Adjust state during render (not a useEffect) — comparing against the
+  // previous isPending value and correcting in the same pass is React's
+  // supported pattern for "derive state from a change", same as the
+  // temp-password-dialog fix in AgencyUsersCard.tsx earlier this project.
+  const [lastPending, setLastPending] = useState(isPending);
+  if (lastPending !== isPending) {
+    setLastPending(isPending);
+    if (lastPending && !isPending && state.error === null) setIsEditing(false);
+  }
 
   function handleCaptionSourceChange(source: FieldSourceValue) {
     setCaptionSource(source);
@@ -109,55 +124,66 @@ export function PostDetailClient({
               <PostStatusBadge status={status} />
             </div>
             {jobs.map((job) => (
-              <div key={job.platform} className="flex items-center gap-2" title={job.error_message ?? undefined}>
+              <div key={job.platform} className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">{PLATFORM_LABEL[job.platform]}:</span>
                 <PostStatusBadge status={job.status} />
-                {job.error_message && <span className="text-xs text-destructive">{job.error_message}</span>}
+                {job.error_message && <span className="text-xs text-destructive">{friendlyErrorMessage(job.error_message)}</span>}
               </div>
             ))}
           </CardContent>
         </Card>
 
         {canEdit ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Bewerken</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form action={formAction} className="flex flex-col gap-4">
-                <input type="hidden" name="caption" value={caption} />
-                <FieldBindingControl
-                  label="Bijschrift"
-                  source={captionSource}
-                  value={caption}
-                  onSourceChange={handleCaptionSourceChange}
-                  onValueChange={handleCaptionChange}
-                  multiline
-                />
-                <div className="flex gap-3">
-                  <div className="flex flex-1 flex-col gap-1.5">
-                    <Label htmlFor="scheduledDate">Datum</Label>
-                    <Input key={dateValue} id="scheduledDate" name="scheduledDate" type="date" defaultValue={dateValue} required />
+          isEditing ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Bewerken</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form action={formAction} className="flex flex-col gap-4">
+                  <input type="hidden" name="caption" value={caption} />
+                  <FieldBindingControl
+                    label="Bijschrift"
+                    source={captionSource}
+                    value={caption}
+                    onSourceChange={handleCaptionSourceChange}
+                    onValueChange={handleCaptionChange}
+                    multiline
+                  />
+                  <div className="flex gap-3">
+                    <div className="flex flex-1 flex-col gap-1.5">
+                      <Label htmlFor="scheduledDate">Datum</Label>
+                      <Input key={dateValue} id="scheduledDate" name="scheduledDate" type="date" defaultValue={dateValue} required />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-1.5">
+                      <Label htmlFor="scheduledTime">Uur</Label>
+                      <Input key={timeValue} id="scheduledTime" name="scheduledTime" type="time" defaultValue={timeValue} required />
+                    </div>
                   </div>
-                  <div className="flex flex-1 flex-col gap-1.5">
-                    <Label htmlFor="scheduledTime">Uur</Label>
-                    <Input key={timeValue} id="scheduledTime" name="scheduledTime" type="time" defaultValue={timeValue} required />
+                  {state.error && (
+                    <Alert variant="destructive">
+                      <AlertDescription>{state.error}</AlertDescription>
+                    </Alert>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Button type="submit" disabled={isPending}>
+                      {isPending ? "Bezig..." : "Wijzigingen opslaan"}
+                    </Button>
+                    <Button type="button" variant="outline" disabled={isPending} onClick={() => setIsEditing(false)}>
+                      Annuleren
+                    </Button>
                   </div>
-                </div>
-                {state.error && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{state.error}</AlertDescription>
-                  </Alert>
-                )}
-                <div className="flex items-center gap-2">
-                  <Button type="submit" disabled={isPending}>
-                    {isPending ? "Bezig..." : "Wijzigingen opslaan"}
-                  </Button>
-                  {canCancel && <CancelPostButton postId={postId} />}
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                </form>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button type="button" onClick={() => setIsEditing(true)}>
+                Bewerken
+              </Button>
+              {canCancel && <CancelPostButton postId={postId} />}
+            </div>
+          )
         ) : (
           canCancel && (
             <Card>
@@ -181,6 +207,7 @@ export function PostDetailClient({
           agencyLogo={agencyLogo}
           slideIndex={slideIndex}
           onSlideIndexChange={setSlideIndex}
+          canvasHeight={canvasHeight}
         />
         {currentSlideImageUrl && (
           <div className="mt-4 flex justify-center">

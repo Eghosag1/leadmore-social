@@ -46,22 +46,24 @@ via SQL), de resterende bestaande templates overzetten, en het oude
 **geen** Canva-achtige drag-and-drop-builder voor het kantoor (zie CLAUDE.md
 "Productvisie") — dit gaat over hoe de *admin* templates aanmaakt.
 
-## Gebruikersbeheer voor kantoorstaff ontbreekt
+## ~~Gebruikersbeheer voor kantoorstaff ontbreekt~~ — afgesloten, gebouwd
 
-Er is geen enkele manier om een `agency_admin`/`agency_user`-account aan te
-maken buiten `scripts/seed.ts` — geen uitnodigingsflow, geen admin-UI-pagina
-om een nieuw kantoorlid toe te voegen. Vandaag moet dat via een script of
-rechtstreeks in Supabase. Blokkerend voor eender welk echt kantoor: een
-platformbeheerder moet zelf, vanuit `/admin/agencies/[id]`, minstens een
-eerste `agency_admin` kunnen aanmaken/uitnodigen (bv. via
-`admin.auth.admin.inviteUserByEmail` + een `profiles`-rij).
+Gebouwd (2026-07-14): een "Gebruikers"-kaart op `/admin/agencies/[id]`
+(`AgencyUsersCard.tsx`) — lijst van bestaande profielen met e-mail (via
+`admin.auth.admin.getUserById`), een toevoegformulier
+(`inviteAgencyUserAction`, `src/app/admin/agencies/actions.ts`: genereert een
+tijdelijk wachtwoord, `createUser` + `profiles`-insert, toont het wachtwoord
+eenmalig in een dialoog), en `removeAgencyUserAction`
+(`admin.auth.admin.deleteUser`).
 
-## Geen wachtwoord-reset
+## ~~Geen wachtwoord-reset~~ — afgesloten, gebouwd
 
-Wie zijn wachtwoord vergeet kan nergens terecht — er is enkel een
-login-pagina (`src/app/(auth)/login`). Nodig: een "wachtwoord vergeten"-link
-die `supabase.auth.resetPasswordForEmail()` gebruikt, plus een pagina om het
-nieuwe wachtwoord in te stellen.
+Gebouwd (2026-07-14): `/forgot-password` en `/reset-password`
+(`ForgotPasswordForm.tsx`/`ResetPasswordForm.tsx`), plus een link vanaf
+`LoginForm.tsx`. De aanvraag loopt via een server action
+(`requestPasswordResetAction`, `src/lib/auth-actions.ts`) i.p.v. een
+rechtstreekse client-side Supabase-call, zodat de rate limit (zie hieronder)
+er ook echt op toegepast kan worden.
 
 ## Echte CRM-integratie
 
@@ -109,18 +111,42 @@ Geen enkel testbestand, geen testrunner (`package.json` heeft enkel `dev`/
 scripts geverifieerd — reëel risico bij toekomstige wijzigingen zonder een
 testharnas.
 
-## Geen rate limiting
+## ~~Geen rate limiting~~ — afgesloten, eerste versie gebouwd
 
-`src/proxy.ts` ververst enkel de Supabase-sessiecookie, verder geen
-rate limiting op login of andere publieke routes.
+Gebouwd (2026-07-14): `src/lib/rate-limit.ts` — een in-memory,
+IP-gekeyde sliding-window teller, toegepast op `signInAction` (5 pogingen/5
+min) en `requestPasswordResetAction` (5 aanvragen/5 min). **Bewust aanvaarde
+beperking**: per-instance (niet gedeeld tussen meerdere Vercel-instanties,
+reset bij een cold start) — een eerste verdedigingslinie, geen waterdichte
+bescherming. Upgrade-pad: `@upstash/ratelimit` met Redis (zelfde
+Upstash-account als de al-bestaande QStash-koppeling) zodra dat nodig blijkt
+in productie.
 
-## Facebook/Instagram-carrousels worden nog niet echt gepubliceerd
+## ~~Facebook/Instagram-carrousels worden nog niet echt gepubliceerd~~ — afgesloten, gebouwd
 
-Ook als een gebruiker een carrousel-template kiest, publiceert
-`facebookPublishingService`/`instagramPublishingService` vandaag enkel de
-eerste foto (`imageUrls[0]`) — staat al zo genoteerd in CLAUDE.md's
-mock-services-tabel als bekende beperking. Facebook heeft hiervoor
-`attached_media` nodig, Instagram een aparte carrousel-media-flow.
+Gebouwd (2026-07-14): `facebookPublishingService.ts`'s
+`createScheduledPost` vertakt nu op `imageUrls.length` — bij >1 foto worden
+alle foto's eerst ongepubliceerd geüpload (`Promise.all`) en dan in één
+`POST /{page-id}/feed`-call samengevoegd via `attached_media`.
+`instagramPublishingService.ts`'s `publishPhotoNow` bouwt bij >1 foto een
+carrousel: per foto een `is_carousel_item`-container (parallel aangemaakt en
+gepolld), dan één ouder-`CAROUSEL`-container, dan pas `media_publish`.
+`instagramSchedulerSweepService.ts` geeft nu alle slides door, niet enkel
+`slides?.[0]`.
+
+**Echte test (2026-07-14) vond een echte bug, intussen gefixt**: een live
+2-foto-carrousel via "nu posten" — Facebook lukte meteen, Instagram faalde
+met `(#9004) Media ID is not available`, ondanks dat `waitForContainerReady`
+vooraf `FINISHED` had gezien. Bleek een Meta-eigenaardigheid specifiek voor
+het ouder-`CAROUSEL`-container: dat container heeft zelf geen afbeelding om
+te verwerken, dus `status_code` staat vrijwel meteen op `FINISHED` — geen
+betrouwbaar signaal dat `media_publish` ook echt zal lukken. Fix:
+`publishContainer()` in `instagramPublishingService.ts` retryt nu tot 4x
+(2s ertussen) specifiek op Graph API-foutcode 9004, i.p.v. enkel op de
+vooraf-check te vertrouwen. Geldt voor zowel de losse-foto- als de
+carrousel-publiceerpaden (gedeelde functie). Bevestigd: `retryPublish()`
+herpakt enkel de mislukte `post_jobs`-rij, dus een retry post Facebook niet
+dubbel.
 
 ## Geen facturatie-integratie
 
@@ -154,17 +180,15 @@ dashboard**: een app-icoon (1024×1024) uploaden, een screencast per
 permissie opnemen (voorgestelde opname-flow staat bij de teksten), en
 effectief indienen. Doorlooptijd doorgaans 2-4 weken per indiening.
 
-## Geen stale-check voor de "publishing"-tussenstatus
+## ~~Geen stale-check voor de "publishing"-tussenstatus~~ — afgesloten, gebouwd
 
-`postDetailService.ts` heeft een lazy stale-check die een post die te lang op
-`rendering` blijft staan (>3 min, aborted request) automatisch naar
-`render_failed` zet. Diezelfde bescherming bestaat niet voor de
-`publishing`-status — noch de al-langer-bestaande Instagram-sweep-claim
-(`instagramSchedulerSweepService.ts`), noch de nieuwe "nu posten"-flow
-(`postSchedulerService.publishPost()`, zie hierboven) hebben zo'n vangnet.
-In de praktijk lost `publishing` normaal binnen enkele seconden op (gewoon
-een paar synchrone Graph API-calls), maar een afgebroken serverless-functie
-zou een post daar in theorie voor altijd op kunnen laten staan.
+Gebouwd (2026-07-14): `postDetailService.ts` heeft nu ook een
+`STALE_PUBLISHING_THRESHOLD_MS`-check (3 min, zelfde patroon als de
+bestaande `rendering`-check) die `posts.status === 'publishing'` na de
+drempel naar `publish_failed` zet + `notifyPostFailure`. Enkel op
+`posts.status` — niet op de aparte, korter-levende `post_jobs`-niveau
+"publishing"-claim in `instagramSchedulerSweepService.ts`, die heeft al zijn
+eigen conditionele claim-guard.
 
 ## Vercel Cron i.p.v. QStash/fire-and-forget, zodra het project naar Pro verhuist
 

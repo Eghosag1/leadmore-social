@@ -32,8 +32,9 @@ export const browserRenderService: RenderService = {
     const token = signRenderToken(input.postId);
     const url = `${siteUrl()}/internal/render-slide/${input.postId}/${input.slideIndex}?token=${token}`;
     const context = `post ${input.postId} slide ${input.slideIndex}`;
+    const viewportHeight = data.canvasMode === "original" && data.canvasHeight ? data.canvasHeight : 1350;
 
-    const buffer = await screenshotCanvas(url, context);
+    const buffer = await screenshotCanvas(url, context, { viewportHeight });
     const admin = createAdminClient();
     const path = `${input.postId}/${input.slideId}.png`;
     const { error: uploadError } = await admin.storage.from("rendered-posts").upload(path, buffer, {

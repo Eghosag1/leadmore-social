@@ -17,6 +17,7 @@ export function FacebookPostMock({
   agencyLogo,
   slideIndex,
   onSlideIndexChange,
+  canvasHeight,
 }: {
   /** Null in "eigen foto's" mode — renders the raw photo instead of a compiled template. */
   componentSource: string | null;
@@ -28,6 +29,7 @@ export function FacebookPostMock({
   agencyLogo?: string;
   slideIndex: number;
   onSlideIndexChange: (index: number) => void;
+  canvasHeight?: number | null;
 }) {
   return (
     <div className="pb-4">
@@ -56,6 +58,7 @@ export function FacebookPostMock({
             data={data}
             slideIndex={slideIndex}
             className="rounded-none shadow-none"
+            canvasHeight={canvasHeight}
           />
         ) : (
           <RawImageSlide imageUrl={data.images[slideIndex] ?? data.images[0]} className="rounded-none shadow-none" />

@@ -103,10 +103,10 @@ function attachDebugListeners(page: Page, context: string) {
   });
 }
 
-async function screenshotOnce(url: string, context: string): Promise<Buffer> {
+async function screenshotOnce(url: string, context: string, viewportHeight: number): Promise<Buffer> {
   const browser = await puppeteer.launch({
     args: launchArgs(),
-    defaultViewport: { width: 1080, height: 1350 },
+    defaultViewport: { width: 1080, height: viewportHeight },
     executablePath: await executablePath(),
     headless: true,
   });
@@ -155,11 +155,12 @@ async function screenshotOnce(url: string, context: string): Promise<Buffer> {
  * means for their context (post rendering falls back to the source photo,
  * template validation marks the template as failed).
  */
-export async function screenshotCanvas(url: string, context: string): Promise<Buffer> {
+export async function screenshotCanvas(url: string, context: string, options?: { viewportHeight?: number }): Promise<Buffer> {
+  const viewportHeight = options?.viewportHeight ?? 1350;
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      return await screenshotOnce(url, `${context} attempt ${attempt}`);
+      return await screenshotOnce(url, `${context} attempt ${attempt}`, viewportHeight);
     } catch (error) {
       lastError = error;
       if (attempt < MAX_ATTEMPTS) await sleep(500 * attempt);

@@ -7,6 +7,7 @@ import type {
   ConnectionStatus,
   CrmProvider,
   Platform,
+  PostCanvasMode,
   PostFormat,
   PostStatus,
   PostType,
@@ -151,6 +152,10 @@ export type PostRow = {
   platforms: Platform[];
   /** Specific reason the last render attempt failed, set only when status is render_failed. */
   render_error: string | null;
+  /** 'fixed' = the standard 1080x1350 canvas; 'original' = canvas_height drives the render wrapper's height instead. Templated posts only, see canvas-format.ts. */
+  canvas_mode: PostCanvasMode;
+  /** Only meaningful when canvas_mode = 'original' — clamped server-side to [565, 1350], see canvas-format.ts. */
+  canvas_height: number | null;
   scheduled_at: string | null;
   created_by: string;
   created_at: string;

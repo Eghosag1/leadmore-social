@@ -15,6 +15,7 @@ export interface PreviewPropertyOption {
 
 export function TemplatePreviewClient({
   componentSource,
+  templateKey,
   slideCount,
   type,
   config,
@@ -23,7 +24,9 @@ export function TemplatePreviewClient({
   customFontUrl,
   properties,
 }: {
-  componentSource: string;
+  componentSource: string | null;
+  /** Set for git-managed (src/templates/registry.ts) templates — mutually exclusive with componentSource, see ScaledTemplateCanvas. */
+  templateKey?: string | null;
   slideCount: number;
   type: TemplateType;
   config: TemplateConfig;
@@ -73,7 +76,12 @@ export function TemplatePreviewClient({
       )}
 
       <div className="max-w-sm">
-        <ScaledTemplateCanvas source={componentSource} data={previewData} slideIndex={slideIndex} className="shadow-sm" />
+        <ScaledTemplateCanvas
+          {...(templateKey ? { templateKey } : { source: componentSource! })}
+          data={previewData}
+          slideIndex={slideIndex}
+          className="shadow-sm"
+        />
         {slideCount > 1 && (
           <div className="mt-3 flex justify-center gap-1.5">
             {Array.from({ length: slideCount }, (_, index) => (

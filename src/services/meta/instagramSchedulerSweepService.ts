@@ -65,8 +65,8 @@ async function publishOneDueJob(
     .select("image_url, rendered_image_url")
     .eq("post_id", post.id)
     .order("sort_order");
-  const imageUrl = slides?.[0] ? (slides[0].rendered_image_url ?? slides[0].image_url) : undefined;
-  if (!imageUrl) {
+  const imageUrls = (slides ?? []).map((s) => s.rendered_image_url ?? s.image_url);
+  if (imageUrls.length === 0) {
     await admin.from("post_jobs").update({ status: "failed", error_message: "Geen foto om te posten." }).eq("id", job.id);
     await updatePostAggregateStatus(post.id);
     return;
@@ -82,7 +82,7 @@ async function publishOneDueJob(
   const result = await publishPhotoNow({
     instagramAccountId: connection.instagramAccountId,
     pageToken: connection.pageToken,
-    imageUrl,
+    imageUrls,
     caption: post.caption,
   });
 

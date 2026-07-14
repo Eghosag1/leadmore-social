@@ -18,6 +18,7 @@ import { FieldBindingControl } from "@/components/dashboard/FieldBindingControl"
 import { PostStatusBadge } from "@/components/shared/StatusBadge";
 import { formatDateInputs } from "@/lib/date-inputs";
 import { MANUAL_SOURCE, resolvePropertyField, type FieldSourceValue } from "@/lib/field-binding";
+import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { updatePostAction, cancelPostQuickAction, getPostQuickViewAction, type UpdatePostState } from "@/app/dashboard/posts/[id]/actions";
 import type { PostDetailData } from "@/services/posts/postDetailService";
 import type { Platform } from "@/types/enums";
@@ -28,6 +29,7 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
   const [captionSource, setCaptionSource] = useState<FieldSourceValue>(MANUAL_SOURCE);
   const [caption, setCaption] = useState(data.initialCaption);
   const [slideIndex, setSlideIndex] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
   const boundAction = updatePostAction.bind(null, data.postId);
   const [state, formAction, isPending] = useActionState(boundAction, { error: null } as UpdatePostState);
   const { dateValue, timeValue } = formatDateInputs(data.scheduledAt);
@@ -49,6 +51,14 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
     setCaptionSource(MANUAL_SOURCE);
   }
 
+  // Adjust state during render (not a useEffect) — see PostDetailClient.tsx's
+  // identical comment for why this shape avoids the setState-in-effect lint.
+  const [lastPending, setLastPending] = useState(isPending);
+  if (lastPending !== isPending) {
+    setLastPending(isPending);
+    if (lastPending && !isPending && state.error === null) setIsEditing(false);
+  }
+
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) {
@@ -67,10 +77,10 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
           <PostStatusBadge status={data.status} />
         </div>
         {data.jobs.map((job) => (
-          <div key={job.platform} className="flex items-center gap-2" title={job.error_message ?? undefined}>
+          <div key={job.platform} className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">{PLATFORM_LABEL[job.platform]}:</span>
             <PostStatusBadge status={job.status} />
-            {job.error_message && <span className="text-xs text-destructive">{job.error_message}</span>}
+            {job.error_message && <span className="text-xs text-destructive">{friendlyErrorMessage(job.error_message)}</span>}
           </div>
         ))}
       </div>
@@ -89,38 +99,49 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
       <div className="grid grid-cols-[minmax(0,1fr)_280px] items-start gap-6">
         <div className="flex flex-col gap-4">
           {canEdit ? (
-            <form action={formAction} className="flex flex-col gap-4">
-              <input type="hidden" name="caption" value={caption} />
-              <FieldBindingControl
-                label="Bijschrift"
-                source={captionSource}
-                value={caption}
-                onSourceChange={handleCaptionSourceChange}
-                onValueChange={handleCaptionChange}
-                multiline
-              />
-              <div className="flex gap-3">
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="scheduledDate">Datum</Label>
-                  <Input key={dateValue} id="scheduledDate" name="scheduledDate" type="date" defaultValue={dateValue} required />
+            isEditing ? (
+              <form action={formAction} className="flex flex-col gap-4">
+                <input type="hidden" name="caption" value={caption} />
+                <FieldBindingControl
+                  label="Bijschrift"
+                  source={captionSource}
+                  value={caption}
+                  onSourceChange={handleCaptionSourceChange}
+                  onValueChange={handleCaptionChange}
+                  multiline
+                />
+                <div className="flex gap-3">
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Label htmlFor="scheduledDate">Datum</Label>
+                    <Input key={dateValue} id="scheduledDate" name="scheduledDate" type="date" defaultValue={dateValue} required />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Label htmlFor="scheduledTime">Uur</Label>
+                    <Input key={timeValue} id="scheduledTime" name="scheduledTime" type="time" defaultValue={timeValue} required />
+                  </div>
                 </div>
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="scheduledTime">Uur</Label>
-                  <Input key={timeValue} id="scheduledTime" name="scheduledTime" type="time" defaultValue={timeValue} required />
+                {state.error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{state.error}</AlertDescription>
+                  </Alert>
+                )}
+                <div className="flex items-center gap-2">
+                  <Button type="submit" disabled={isPending}>
+                    {isPending ? "Bezig..." : "Wijzigingen opslaan"}
+                  </Button>
+                  <Button type="button" variant="outline" disabled={isPending} onClick={() => setIsEditing(false)}>
+                    Annuleren
+                  </Button>
                 </div>
-              </div>
-              {state.error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{state.error}</AlertDescription>
-                </Alert>
-              )}
+              </form>
+            ) : (
               <div className="flex items-center gap-2">
-                <Button type="submit" disabled={isPending}>
-                  {isPending ? "Bezig..." : "Wijzigingen opslaan"}
+                <Button type="button" onClick={() => setIsEditing(true)}>
+                  Bewerken
                 </Button>
                 {canCancel && <CancelPostButton postId={data.postId} action={cancelPostQuickAction} onCancelled={onCancelled} />}
               </div>
-            </form>
+            )
           ) : (
             canCancel && <CancelPostButton postId={data.postId} action={cancelPostQuickAction} onCancelled={onCancelled} />
           )}
@@ -141,6 +162,7 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
           agencyLogo={data.agencyLogo}
           slideIndex={slideIndex}
           onSlideIndexChange={setSlideIndex}
+          canvasHeight={data.canvasMode === "original" ? data.canvasHeight : null}
         />
       </div>
     </div>

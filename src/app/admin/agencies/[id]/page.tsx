@@ -7,8 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { listAgencyTemplatesForAdmin } from "@/services/templates/templateService";
 import { TemplateStatusControl } from "@/components/admin/TemplateStatusControl";
+import { AgencyUsersCard, type AgencyUserRow } from "@/components/admin/AgencyUsersCard";
+import { inviteAgencyUserAction, removeAgencyUserAction } from "../actions";
 
 export default async function AgencyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +22,20 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ i
   if (!agency) notFound();
 
   const templates = await listAgencyTemplatesForAdmin(id);
+
+  // Emails live on auth.users, not profiles — same admin.auth.admin.getUserById
+  // lookup pattern as postFailureNotificationService.ts.
+  const admin = createAdminClient();
+  const { data: profiles } = await admin.from("profiles").select("user_id, full_name, role").eq("agency_id", id);
+  const agencyUsers: AgencyUserRow[] = await Promise.all(
+    (profiles ?? []).map(async (profile) => {
+      const { data } = await admin.auth.admin.getUserById(profile.user_id);
+      return { userId: profile.user_id, fullName: profile.full_name, email: data.user?.email ?? "—", role: profile.role };
+    }),
+  );
+
+  const boundInviteAction = inviteAgencyUserAction.bind(null, id);
+  const boundRemoveAction = removeAgencyUserAction.bind(null, id);
 
   return (
     <div>
@@ -40,6 +57,10 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ i
           </>
         }
       />
+
+      <div className="mb-6 max-w-2xl">
+        <AgencyUsersCard agencyId={id} users={agencyUsers} inviteAction={boundInviteAction} removeAction={boundRemoveAction} />
+      </div>
 
       {templates.length === 0 ? (
         <p className="rounded-lg border border-dashed border-neutral-200 py-16 text-center text-sm text-muted-foreground">

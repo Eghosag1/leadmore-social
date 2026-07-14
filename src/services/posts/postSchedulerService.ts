@@ -6,7 +6,7 @@ import { facebookPublishingService } from "@/services/meta/facebookPublishingSer
 import { instagramPublishingService } from "@/services/meta/instagramPublishingService";
 import { notifyPostFailure } from "@/services/notifications/postFailureNotificationService";
 import type { Database } from "@/types/database";
-import type { Platform, PostType } from "@/types/enums";
+import type { Platform, PostCanvasMode, PostType } from "@/types/enums";
 
 export interface CreatePostSlideInput {
   imageUrl: string;
@@ -24,6 +24,9 @@ export interface CreatePostInput {
   slides: CreatePostSlideInput[];
   /** Persisted immediately, before rendering ever runs — see publishPost, which reads this back instead of taking it as a parameter (so a retry after a render failure doesn't need to re-collect it). */
   platforms: Platform[];
+  /** 'fixed' = the standard 1080x1350 canvas; 'original' = canvasHeight drives the render wrapper's height. Templated posts only — always 'fixed'/null for "eigen foto's". */
+  canvasMode: PostCanvasMode;
+  canvasHeight: number | null;
 }
 
 /** Step 10 of the post flow: "App maakt post aan" (status starts as draft). */
@@ -41,6 +44,8 @@ export async function createPost(input: CreatePostInput): Promise<{ postId: stri
       status: "draft",
       created_by: input.createdBy,
       platforms: input.platforms,
+      canvas_mode: input.canvasMode,
+      canvas_height: input.canvasHeight,
     })
     .select("id")
     .single();

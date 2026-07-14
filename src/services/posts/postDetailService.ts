@@ -6,7 +6,7 @@ import { notifyPostFailure } from "@/services/notifications/postFailureNotificat
 import { buildRawPhotoRenderProps, buildTemplateRenderProps } from "@/lib/template-render";
 import type { PropertyRow } from "@/types/database";
 import type { TemplateConfig, TemplateRenderProps } from "@/types/domain";
-import type { Platform, PostStatus } from "@/types/enums";
+import type { Platform, PostCanvasMode, PostStatus } from "@/types/enums";
 
 export interface PostDetailData {
   postId: string;
@@ -18,6 +18,8 @@ export interface PostDetailData {
   jobs: { platform: Platform; status: PostStatus; error_message: string | null }[];
   componentSource: string | null;
   templateKey: string | null;
+  canvasMode: PostCanvasMode;
+  canvasHeight: number | null;
   slideCount: number;
   previewData: TemplateRenderProps;
   agencyName: string;
@@ -43,6 +45,13 @@ const STALE_RENDERING_THRESHOLD_MS = 3 * 60 * 1000;
 // this is a generous safety margin, not a normal wait.
 const STALE_PENDING_RENDER_THRESHOLD_MS = 20 * 1000;
 
+// "Nu posten" (postSchedulerService.publishPost()) puts a post on
+// 'publishing' while it makes a handful of synchronous Graph API calls —
+// normally seconds. Same rationale/threshold as STALE_RENDERING_THRESHOLD_MS:
+// well above what a healthy run needs, so this only catches an aborted
+// request or a crash outside publishPost()'s own try/catch.
+const STALE_PUBLISHING_THRESHOLD_MS = 3 * 60 * 1000;
+
 /**
  * Assembles everything a post detail view needs (full page or quick-view
  * sheet) — same shape either way so both surfaces stay in sync. Returns null
@@ -64,6 +73,13 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     post.status = "render_failed";
     post.render_error = staleError;
     await notifyPostFailure(postId, "render", staleError);
+  }
+
+  if (post.status === "publishing" && Date.now() - new Date(post.updated_at).getTime() > STALE_PUBLISHING_THRESHOLD_MS) {
+    const staleError = "Publiceren duurde te lang of werd onderbroken.";
+    await supabase.from("posts").update({ status: "publish_failed" }).eq("id", postId);
+    post.status = "publish_failed";
+    await notifyPostFailure(postId, "publish", staleError);
   }
 
   // Safety net for the fire-and-forget queue trigger in
@@ -147,6 +163,8 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     jobs: jobs ?? [],
     componentSource,
     templateKey,
+    canvasMode: post.canvas_mode,
+    canvasHeight: post.canvas_height,
     slideCount,
     previewData,
     agencyName: agency?.name ?? "",

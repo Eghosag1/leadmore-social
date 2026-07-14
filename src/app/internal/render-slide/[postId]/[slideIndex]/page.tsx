@@ -8,8 +8,12 @@ import { verifyRenderToken } from "@/lib/render/token";
  * Bare, unauthenticated page rendered by browserRenderService's headless
  * Chromium instance (server-to-server, no user session — see
  * src/lib/render/token.ts for how it's authorized instead of requireRole()).
- * Shows exactly one slide's DynamicTemplateRenderer output at a fixed
- * 1080x1350 (4:5) canvas (`data-render-canvas`, what Puppeteer screenshots).
+ * Shows exactly one slide's DynamicTemplateRenderer output at a 1080px-wide
+ * canvas (`data-render-canvas`, what Puppeteer screenshots) — the height is
+ * the standard 1350 (4:5) unless the post used canvas_mode 'original', in
+ * which case it's the pre-computed, pre-clamped canvas_height (see
+ * src/lib/canvas-format.ts). Templates are already height-relative
+ * (flex/percentage-based), so no template needs to know which case it's in.
  *
  * Three things make this deterministic, no CDN/DOM-scanning/blind waits
  * needed:
@@ -47,11 +51,12 @@ export default async function RenderSlidePage({
   if (!data || (!data.componentSource && !data.templateKey)) notFound();
 
   const compiledCss = data.templateKey ? null : (data.compiledCss ?? (await getCompiledCssForTemplate(data.componentSource!)));
+  const canvasHeight = data.canvasMode === "original" && data.canvasHeight ? data.canvasHeight : 1350;
 
   return (
     <>
       {compiledCss && <style dangerouslySetInnerHTML={{ __html: compiledCss }} />}
-      <div data-render-canvas="true" className="h-[1350px] w-[1080px] overflow-hidden">
+      <div data-render-canvas="true" className="w-[1080px] overflow-hidden" style={{ height: canvasHeight }}>
         <DynamicTemplateRenderer
           {...(data.templateKey ? { templateKey: data.templateKey } : { source: data.componentSource! })}
           data={data.previewData}

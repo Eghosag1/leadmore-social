@@ -73,47 +73,125 @@ async function waitForContainerReady(containerId: string, pageToken: string): Pr
   return { ok: false, errorMessage: "Instagram was de afbeelding nog aan het verwerken en werd niet op tijd klaar." };
 }
 
-/**
- * Real two-step Instagram publish: create a media container, then publish
- * it. Used both for an immediate (scheduledAt already due) post and by
- * instagramSchedulerSweepService.ts once a scheduled post's time comes.
- */
-export async function publishPhotoNow(params: {
+/** Creates a single-image (non-carousel) media container. */
+async function createImageContainer(params: {
   instagramAccountId: string;
   pageToken: string;
   imageUrl: string;
-  caption: string;
-}): Promise<MetaSchedulingResult> {
-  try {
-    const containerResponse = await fetch(`${GRAPH_BASE}/${params.instagramAccountId}/media`, {
-      method: "POST",
-      body: new URLSearchParams({
-        image_url: params.imageUrl,
-        caption: params.caption,
-        access_token: params.pageToken,
-      }),
-    });
-    const container = await containerResponse.json();
-    if (!containerResponse.ok) {
-      return { ok: false, errorMessage: container?.error?.message ?? `Instagram API-fout (${containerResponse.status})` };
-    }
+  caption?: string;
+  isCarouselItem?: boolean;
+}): Promise<{ id: string } | { error: string }> {
+  const body = new URLSearchParams({
+    image_url: params.imageUrl,
+    access_token: params.pageToken,
+  });
+  if (params.caption) body.set("caption", params.caption);
+  if (params.isCarouselItem) body.set("is_carousel_item", "true");
 
-    const ready = await waitForContainerReady(container.id, params.pageToken);
-    if (!ready.ok) return { ok: false, errorMessage: ready.errorMessage };
+  const response = await fetch(`${GRAPH_BASE}/${params.instagramAccountId}/media`, { method: "POST", body });
+  const result = await response.json();
+  if (!response.ok) return { error: result?.error?.message ?? `Instagram API-fout (${response.status})` };
+  return { id: result.id };
+}
 
+// Graph API error code for "(#9004) Media ID is not available" — thrown when
+// media_publish is called before Meta's backend has actually finished
+// registering the container, even though a prior status_code poll already
+// reported FINISHED. Confirmed via a real carousel test (2026-07-14): the
+// CAROUSEL parent container has no image of its own to process, so it
+// reports FINISHED on the very first poll — status_code isn't a reliable
+// publish-readiness signal for it. Same underlying race the single-image
+// path already documented, just not fully closed by the pre-publish poll —
+// retrying the publish call itself on this specific code is the robust fix.
+const MEDIA_ID_NOT_AVAILABLE_CODE = 9004;
+const PUBLISH_RETRY_ATTEMPTS = 4;
+const PUBLISH_RETRY_DELAY_MS = 2000;
+
+async function publishContainer(params: { instagramAccountId: string; pageToken: string; creationId: string }): Promise<MetaSchedulingResult> {
+  for (let attempt = 1; attempt <= PUBLISH_RETRY_ATTEMPTS; attempt++) {
     const publishResponse = await fetch(`${GRAPH_BASE}/${params.instagramAccountId}/media_publish`, {
       method: "POST",
       body: new URLSearchParams({
-        creation_id: container.id,
+        creation_id: params.creationId,
         access_token: params.pageToken,
       }),
     });
     const published = await publishResponse.json();
-    if (!publishResponse.ok) {
+    if (publishResponse.ok) return { ok: true, metaObjectId: published.id };
+
+    const isRetryable = published?.error?.code === MEDIA_ID_NOT_AVAILABLE_CODE && attempt < PUBLISH_RETRY_ATTEMPTS;
+    if (!isRetryable) {
       return { ok: false, errorMessage: published?.error?.message ?? `Instagram API-fout (${publishResponse.status})` };
     }
+    await new Promise((resolve) => setTimeout(resolve, PUBLISH_RETRY_DELAY_MS));
+  }
+  // Unreachable — the loop always returns on its last attempt.
+  return { ok: false, errorMessage: "Instagram media_publish is onverwacht mislukt." };
+}
 
-    return { ok: true, metaObjectId: published.id };
+/**
+ * Real Instagram publish: create a media container, then publish it. Used
+ * both for an immediate (scheduledAt already due) post and by
+ * instagramSchedulerSweepService.ts once a scheduled post's time comes.
+ *
+ * A single image reuses the plain container->publish path. Multiple images
+ * become a carousel: each image becomes its own is_carousel_item container
+ * (created and polled in parallel — important for the sweep's shared 60s
+ * Hobby-plan budget, sequential polling could blow that with 4+ photos),
+ * then one parent CAROUSEL container referencing all of them via `children`,
+ * itself polled too, and only then published.
+ */
+export async function publishPhotoNow(params: {
+  instagramAccountId: string;
+  pageToken: string;
+  imageUrls: string[];
+  caption: string;
+}): Promise<MetaSchedulingResult> {
+  try {
+    if (params.imageUrls.length <= 1) {
+      const container = await createImageContainer({
+        instagramAccountId: params.instagramAccountId,
+        pageToken: params.pageToken,
+        imageUrl: params.imageUrls[0],
+        caption: params.caption,
+      });
+      if ("error" in container) return { ok: false, errorMessage: container.error };
+
+      const ready = await waitForContainerReady(container.id, params.pageToken);
+      if (!ready.ok) return { ok: false, errorMessage: ready.errorMessage };
+
+      return publishContainer({ instagramAccountId: params.instagramAccountId, pageToken: params.pageToken, creationId: container.id });
+    }
+
+    const itemContainers = await Promise.all(
+      params.imageUrls.map((imageUrl) =>
+        createImageContainer({ instagramAccountId: params.instagramAccountId, pageToken: params.pageToken, imageUrl, isCarouselItem: true }),
+      ),
+    );
+    const failedItem = itemContainers.find((item) => "error" in item) as { error: string } | undefined;
+    if (failedItem) return { ok: false, errorMessage: failedItem.error };
+    const itemIds = itemContainers.map((item) => (item as { id: string }).id);
+
+    const itemReadyResults = await Promise.all(itemIds.map((id) => waitForContainerReady(id, params.pageToken)));
+    const failedReady = itemReadyResults.find((result) => !result.ok) as { ok: false; errorMessage: string } | undefined;
+    if (failedReady) return { ok: false, errorMessage: failedReady.errorMessage };
+
+    const carouselBody = new URLSearchParams({
+      media_type: "CAROUSEL",
+      children: itemIds.join(","),
+      caption: params.caption,
+      access_token: params.pageToken,
+    });
+    const carouselResponse = await fetch(`${GRAPH_BASE}/${params.instagramAccountId}/media`, { method: "POST", body: carouselBody });
+    const carousel = await carouselResponse.json();
+    if (!carouselResponse.ok) {
+      return { ok: false, errorMessage: carousel?.error?.message ?? `Instagram API-fout (${carouselResponse.status})` };
+    }
+
+    const carouselReady = await waitForContainerReady(carousel.id, params.pageToken);
+    if (!carouselReady.ok) return { ok: false, errorMessage: carouselReady.errorMessage };
+
+    return publishContainer({ instagramAccountId: params.instagramAccountId, pageToken: params.pageToken, creationId: carousel.id });
   } catch (error) {
     return { ok: false, errorMessage: error instanceof Error ? error.message : "Onbekende fout bij Instagram-publicatie." };
   }
@@ -132,17 +210,13 @@ export async function publishPhotoNow(params: {
  * null until that real publish happens, which is also what
  * publishReconciliationService.ts's checkableJobs filter relies on (a null
  * meta_object_id means "not actually published yet, nothing to check").
- *
- * Not yet in scope: carousel/multi-photo posts — mirrors the same limitation
- * facebookPublishingService.ts already has (imageUrls[0] only).
  */
 export const instagramPublishingService: MetaPublishingService = {
   async schedule(request: MetaSchedulingRequest, client?: SupabaseClient<Database>): Promise<MetaSchedulingResult> {
     const connection = await getInstagramToken(request.agencyId, client);
     if ("error" in connection) return { ok: false, errorMessage: connection.error };
 
-    const imageUrl = request.imageUrls[0];
-    if (!imageUrl) return { ok: false, errorMessage: "Geen foto om te posten." };
+    if (request.imageUrls.length === 0) return { ok: false, errorMessage: "Geen foto om te posten." };
 
     // In practice always a future timestamp (parseScheduledAt rejects past
     // dates at post-creation time) — handled anyway for interface honesty.
@@ -150,7 +224,7 @@ export const instagramPublishingService: MetaPublishingService = {
       return publishPhotoNow({
         instagramAccountId: connection.instagramAccountId,
         pageToken: connection.pageToken,
-        imageUrl,
+        imageUrls: request.imageUrls,
         caption: request.caption,
       });
     }

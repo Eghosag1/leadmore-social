@@ -17,6 +17,7 @@ export function InstagramPostMock({
   agencyLogo,
   slideIndex,
   onSlideIndexChange,
+  canvasHeight,
 }: {
   /** Null in "eigen foto's" mode — renders the raw photo instead of a compiled template. */
   componentSource: string | null;
@@ -28,6 +29,7 @@ export function InstagramPostMock({
   agencyLogo?: string;
   slideIndex: number;
   onSlideIndexChange: (index: number) => void;
+  canvasHeight?: number | null;
 }) {
   const handle = agencyName ? agencyName.toLowerCase().replace(/\s+/g, "") : "uw_kantoor";
 
@@ -48,6 +50,7 @@ export function InstagramPostMock({
             data={data}
             slideIndex={slideIndex}
             className="rounded-none shadow-none"
+            canvasHeight={canvasHeight}
           />
         ) : (
           <RawImageSlide imageUrl={data.images[slideIndex] ?? data.images[0]} className="rounded-none shadow-none" />

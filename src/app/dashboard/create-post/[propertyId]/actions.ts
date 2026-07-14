@@ -8,7 +8,8 @@ import { createPost } from "@/services/posts/postSchedulerService";
 import { parseScheduledAt } from "@/lib/scheduled-time";
 import { signQueueToken } from "@/lib/queue/token";
 import { siteUrl } from "@/lib/site-url";
-import type { Platform, PostType } from "@/types/enums";
+import { clampCanvasHeight } from "@/lib/canvas-format";
+import type { Platform, PostCanvasMode, PostType } from "@/types/enums";
 
 export interface CreatePostState {
   error: string | null;
@@ -34,9 +35,27 @@ export async function createAndSchedulePostAction(
   const postNow = formData.get("postNow") === "on";
   const scheduledDate = String(formData.get("scheduledDate") ?? "");
   const scheduledTime = String(formData.get("scheduledTime") ?? "");
+  const canvasModeField = String(formData.get("canvasMode") ?? "fixed") as PostCanvasMode;
 
   if (platforms.length === 0) {
     return { error: "Kies minstens één platform (Facebook of Instagram)." };
+  }
+
+  // Re-clamp server-side rather than trusting the client-computed value —
+  // this is a range check, not a re-measurement (no image-decode dependency
+  // exists in this codebase to verify the number actually matches the
+  // photo), but it does guarantee the persisted height can never break
+  // Puppeteer's viewport or Meta's publish call. "Eigen foto's" mode never
+  // gets a non-fixed canvas — see canvas-format.ts / CLAUDE.md.
+  let canvasMode: PostCanvasMode = "fixed";
+  let canvasHeight: number | null = null;
+  if (mode === "template" && canvasModeField === "original") {
+    const rawHeight = Number(formData.get("canvasHeight"));
+    if (!Number.isFinite(rawHeight) || rawHeight <= 0) {
+      return { error: "Ongeldig canvasformaat." };
+    }
+    canvasMode = "original";
+    canvasHeight = clampCanvasHeight(rawHeight);
   }
 
   // "Nu posten" deliberately skips scheduling entirely — scheduledAt stays
@@ -123,6 +142,8 @@ export async function createAndSchedulePostAction(
     createdBy: current.profile.id,
     slides,
     platforms,
+    canvasMode,
+    canvasHeight,
   });
 
   // The post now exists for real (chosen photo/template/platforms all

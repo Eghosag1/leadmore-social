@@ -24,9 +24,17 @@ const NATIVE_HEIGHT = 1350; // 4:5 — matches the internal render-slide/render-
  */
 type TemplateReference = { source: string; templateKey?: undefined } | { templateKey: string; source?: undefined };
 
-export function ScaledTemplateCanvas({ source, templateKey, data, slideIndex, className }: TemplateReference & TemplateComponentProps) {
+export function ScaledTemplateCanvas({
+  source,
+  templateKey,
+  data,
+  slideIndex,
+  className,
+  canvasHeight,
+}: TemplateReference & TemplateComponentProps & { /** Overrides NATIVE_HEIGHT — set when the post uses canvas_mode 'original'. */ canvasHeight?: number | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
+  const height = canvasHeight ?? NATIVE_HEIGHT;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -40,8 +48,8 @@ export function ScaledTemplateCanvas({ source, templateKey, data, slideIndex, cl
   }, []);
 
   return (
-    <div ref={containerRef} className="relative aspect-[4/5] w-full overflow-hidden">
-      <div style={{ width: NATIVE_WIDTH, height: NATIVE_HEIGHT, transform: `scale(${scale})`, transformOrigin: "top left" }}>
+    <div ref={containerRef} className="relative w-full overflow-hidden" style={{ aspectRatio: `${NATIVE_WIDTH} / ${height}` }}>
+      <div style={{ width: NATIVE_WIDTH, height, transform: `scale(${scale})`, transformOrigin: "top left" }}>
         <DynamicTemplateRenderer
           {...(templateKey ? { templateKey } : { source: source! })}
           data={data}
