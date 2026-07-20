@@ -6,7 +6,7 @@ import { facebookPublishingService } from "@/services/meta/facebookPublishingSer
 import { instagramPublishingService } from "@/services/meta/instagramPublishingService";
 import { notifyPostFailure } from "@/services/notifications/postFailureNotificationService";
 import type { Database } from "@/types/database";
-import type { Platform, PostCanvasMode, PostType } from "@/types/enums";
+import type { CanvasFormat, Platform, PostCanvasMode, PostType } from "@/types/enums";
 
 export interface CreatePostSlideInput {
   imageUrl: string;
@@ -24,9 +24,11 @@ export interface CreatePostInput {
   slides: CreatePostSlideInput[];
   /** Persisted immediately, before rendering ever runs — see publishPost, which reads this back instead of taking it as a parameter (so a retry after a render failure doesn't need to re-collect it). */
   platforms: Platform[];
-  /** 'fixed' = the standard 1080x1350 canvas; 'original' = canvasHeight drives the render wrapper's height. Templated posts only — always 'fixed'/null for "eigen foto's". */
+  /** 'fixed' = the standard 1080x1350 canvas; 'original' = canvasHeight drives the render wrapper's height. Legacy componentSource/"eigen foto's" posts only — ignored whenever canvasFormat is set. */
   canvasMode: PostCanvasMode;
   canvasHeight: number | null;
+  /** Which of a scene template's designed CanvasFormats this post uses — null for legacy componentSource/"eigen foto's" posts, always set for scene-template posts. See 0017_scene_canvas_formats.sql. */
+  canvasFormat: CanvasFormat | null;
 }
 
 /** Step 10 of the post flow: "App maakt post aan" (status starts as draft). */
@@ -46,6 +48,7 @@ export async function createPost(input: CreatePostInput): Promise<{ postId: stri
       platforms: input.platforms,
       canvas_mode: input.canvasMode,
       canvas_height: input.canvasHeight,
+      canvas_format: input.canvasFormat,
     })
     .select("id")
     .single();

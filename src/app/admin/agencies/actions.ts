@@ -28,8 +28,6 @@ function readAgencyFields(formData: FormData) {
     name: String(formData.get("name") ?? "").trim(),
     logoUrl: String(formData.get("logoUrl") ?? "").trim() || null,
     websiteUrl: String(formData.get("websiteUrl") ?? "").trim() || null,
-    customFontUrl: String(formData.get("customFontUrl") ?? "").trim() || null,
-    customFontFamily: String(formData.get("customFontFamily") ?? "").trim() || null,
   };
 }
 
@@ -46,8 +44,6 @@ export async function createAgencyAction(_prev: AgencyFormState, formData: FormD
       slug: slugify(fields.name),
       logo_url: fields.logoUrl,
       website_url: fields.websiteUrl,
-      custom_font_url: fields.customFontUrl,
-      custom_font_family: fields.customFontFamily,
     })
     .select("id")
     .single();
@@ -75,8 +71,6 @@ export async function updateAgencyAction(agencyId: string, _prev: AgencyFormStat
       name: fields.name,
       logo_url: fields.logoUrl,
       website_url: fields.websiteUrl,
-      custom_font_url: fields.customFontUrl,
-      custom_font_family: fields.customFontFamily,
     })
     .eq("id", agencyId);
 
@@ -325,4 +319,51 @@ export async function removeAgencyUserAction(agencyId: string, userId: string): 
   const admin = createAdminClient();
   await admin.auth.admin.deleteUser(userId);
   revalidatePath(`/admin/agencies/${agencyId}`);
+}
+
+export interface AddAgencyFontState {
+  error: string | null;
+}
+
+/**
+ * The actual file upload already happened client-side (FontsCard.tsx, same
+ * Supabase Storage pattern FontUploader.tsx used) before this runs — this
+ * just persists the resulting public URL as a new row. See
+ * PLAN_TEMPLATE_EDITOR.md Phase A: an agency can now have any number of
+ * fonts (was exactly one, agencies.custom_font_url/custom_font_family).
+ */
+export async function addAgencyFontAction(agencyId: string, _prev: AddAgencyFontState, formData: FormData): Promise<AddAgencyFontState> {
+  await requireRole(["super_admin"]);
+
+  const label = String(formData.get("label") ?? "").trim();
+  const fontUrl = String(formData.get("fontUrl") ?? "").trim();
+  const fontFamily = String(formData.get("fontFamily") ?? "").trim();
+
+  if (!label || !fontUrl || !fontFamily) return { error: "Vul een naam in en upload een lettertype-bestand." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("agency_fonts").insert({ agency_id: agencyId, label, font_url: fontUrl, font_family: fontFamily });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/admin/agencies/${agencyId}/settings`);
+  return { error: null };
+}
+
+/** Deletes both the DB row and the underlying Storage object — unlike the old single-font FontUploader, which left the previous file orphaned in Storage on every re-upload. */
+export async function removeAgencyFontAction(agencyId: string, fontId: string): Promise<void> {
+  await requireRole(["super_admin"]);
+  const admin = createAdminClient();
+
+  const { data: font } = await admin.from("agency_fonts").select("font_url").eq("id", fontId).maybeSingle();
+  if (font) {
+    const marker = "/agency-fonts/";
+    const markerIndex = font.font_url.indexOf(marker);
+    if (markerIndex !== -1) {
+      const path = font.font_url.slice(markerIndex + marker.length);
+      await admin.storage.from("agency-fonts").remove([path]);
+    }
+  }
+
+  await admin.from("agency_fonts").delete().eq("id", fontId);
+  revalidatePath(`/admin/agencies/${agencyId}/settings`);
 }

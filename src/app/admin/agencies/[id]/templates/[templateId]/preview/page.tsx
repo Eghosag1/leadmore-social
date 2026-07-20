@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getAgencyTemplate } from "@/services/templates/templateService";
 import { EXAMPLE_PROPERTY, EXAMPLE_PROPERTY_IMAGES } from "@/data/mock/example-property";
+import { isSceneTemplate as computeIsSceneTemplate } from "@/lib/scene/resolveScene";
 import type { TemplateConfig } from "@/types/domain";
 
 export default async function AgencyTemplatePreviewPage({
@@ -17,13 +18,16 @@ export default async function AgencyTemplatePreviewPage({
   await requireRole(["super_admin"]);
   const supabase = await createClient();
 
-  const [{ data: agency }, template, { data: properties }] = await Promise.all([
-    supabase.from("agencies").select("id, name, custom_font_url, custom_font_family").eq("id", id).maybeSingle(),
+  const [{ data: agency }, template, { data: properties }, { data: fonts }] = await Promise.all([
+    supabase.from("agencies").select("id, name").eq("id", id).maybeSingle(),
     getAgencyTemplate(templateId),
     supabase.from("properties").select("*").eq("agency_id", id).order("created_at", { ascending: false }).limit(20),
+    supabase.from("agency_fonts").select("*").eq("agency_id", id),
   ]);
 
   if (!agency || !template || template.agency_id !== id) notFound();
+
+  const isSceneTemplate = computeIsSceneTemplate(template.scenes_by_format);
 
   const propertyIds = (properties ?? []).map((p) => p.id);
   const { data: images } = propertyIds.length
@@ -45,20 +49,19 @@ export default async function AgencyTemplatePreviewPage({
       <PageHeader
         title={`Preview — ${template.name}`}
         description={agency.name}
-        backHref={`/admin/agencies/${id}/templates/${templateId}`}
-        backLabel={template.name}
+        backHref={isSceneTemplate ? `/admin/agencies/${id}/templates/${templateId}/editor` : `/admin/agencies/${id}`}
+        backLabel={isSceneTemplate ? template.name : agency.name}
       />
       <Card className="max-w-xl">
         <CardContent className="pt-6">
           <TemplatePreviewClient
             componentSource={template.component_source}
-            templateKey={template.template_key}
+            scenesByFormat={isSceneTemplate ? template.scenes_by_format : null}
             slideCount={template.slide_count}
             type={template.type}
             config={template.config as unknown as TemplateConfig}
             agencyName={agency.name}
-            customFontFamily={agency.custom_font_family ?? undefined}
-            customFontUrl={agency.custom_font_url ?? undefined}
+            fonts={fonts ?? []}
             properties={propertyOptions}
           />
         </CardContent>

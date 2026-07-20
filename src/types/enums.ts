@@ -41,6 +41,14 @@ export type PostType = (typeof POST_TYPES)[number];
 export const POST_CANVAS_MODES = ["fixed", "original"] as const;
 export type PostCanvasMode = (typeof POST_CANVAS_MODES)[number];
 
+// Which fixed aspect ratio a scene-based template was designed for / a
+// scene-template post uses (see src/types/scene.ts's
+// CANVAS_FORMAT_DIMENSIONS for the actual pixel sizes) — a separate concept
+// from PostCanvasMode above, which only applies to legacy component_source /
+// "eigen foto's" posts. Width is always 1080; only the height differs.
+export const CANVAS_FORMATS = ["portrait", "square", "landscape"] as const;
+export type CanvasFormat = (typeof CANVAS_FORMATS)[number];
+
 export const PLATFORMS = ["facebook", "instagram"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 

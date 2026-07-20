@@ -16,10 +16,9 @@ import { verifyRenderToken } from "@/lib/render/token";
  * Deliberately always recompiles CSS live (getCompiledCssForTemplate) rather
  * than reading a persisted `compiled_css` column — validating *is* the step
  * that produces that column, so at this point it can't be trusted yet. Only
- * applies to `componentSource` (DB-string) templates — a `templateKey`
- * (git-managed) template's CSS is already part of the app's normal build, so
- * there's nothing to compile or inject here for that path (see the
- * "Templatearchitectuur" migration plan, step 4).
+ * applies to `componentSource` (DB-string) templates — a scene has nothing
+ * to compile at all (SceneRenderer paints inline styles), see
+ * /internal/render-template-scene instead.
  */
 export default async function RenderTemplatePage({
   params,
@@ -36,14 +35,14 @@ export default async function RenderTemplatePage({
   const data = await getTemplateValidationRenderData(templateId);
   if (!data) notFound();
 
-  const compiledCss = data.templateKey ? null : await getCompiledCssForTemplate(data.componentSource);
+  const compiledCss = await getCompiledCssForTemplate(data.componentSource);
 
   return (
     <>
       {compiledCss && <style dangerouslySetInnerHTML={{ __html: compiledCss }} />}
       <div data-render-canvas="true" className="h-[1350px] w-[1080px] overflow-hidden">
         <DynamicTemplateRenderer
-          {...(data.templateKey ? { templateKey: data.templateKey } : { source: data.componentSource })}
+          source={data.componentSource}
           data={data.previewData}
           slideIndex={Number(slideIndex) || 0}
           className="rounded-none shadow-none"

@@ -1,7 +1,8 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { AgencyTemplateRow, AgencyTemplateVersionRow } from "@/types/database";
+import type { AgencyTemplateRow } from "@/types/database";
 import type { TemplateConfig } from "@/types/domain";
+import type { ScenesByFormat } from "@/types/scene";
 
 /** Admin view: every template for one agency, active or not, including billing metadata. */
 export async function listAgencyTemplatesForAdmin(agencyId: string): Promise<AgencyTemplateRow[]> {
@@ -25,7 +26,8 @@ export interface AgencyTemplateForCustomer {
   name: string;
   description: string | null;
   component_source: string;
-  template_key: string | null;
+  /** Non-null (with at least one format key) = a scene-based template (Phase C + formats follow-up) — see getFormatScenes()/resolveSceneForSlide(). */
+  scenes_by_format: ScenesByFormat | null;
   slide_count: number;
   type: AgencyTemplateRow["type"];
   post_format: AgencyTemplateRow["post_format"];
@@ -38,14 +40,18 @@ export async function listActiveAgencyTemplatesForCustomer(agencyId: string): Pr
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("agency_templates")
-    .select("id, name, description, component_source, template_key, slide_count, type, post_format, config, preview_image_url, sort_order")
+    .select(
+      "id, name, description, component_source, scenes_by_format, slide_count, type, post_format, config, preview_image_url, sort_order",
+    )
     .eq("agency_id", agencyId)
     .eq("status", "published")
     .order("sort_order");
   if (error) throw new Error(error.message);
   // config is stored as jsonb (Record<string, unknown> at the DB layer); we
-  // trust it to match TemplateConfig because only createAgencyTemplate and
-  // updateAgencyTemplate ever write to this column.
+  // trust it to match TemplateConfig because only createSceneAgencyTemplate
+  // ever writes to this column (the old componentSource-editing path that
+  // used to let an admin edit `config.brand`/`defaultTexts` freely has been
+  // removed — see PLAN_TEMPLATE_EDITOR.md Phase E follow-up).
   return (data ?? []) as unknown as AgencyTemplateForCustomer[];
 }
 
@@ -55,26 +61,30 @@ export async function getAgencyTemplate(id: string): Promise<AgencyTemplateRow |
   return data;
 }
 
-export interface CreateAgencyTemplateInput {
+export interface CreateSceneAgencyTemplateInput {
   agencyId: string;
   name: string;
   description: string | null;
-  componentSource: string;
-  slideCount: number;
-  postFormat: AgencyTemplateRow["post_format"];
-  config: TemplateConfig;
+  type: AgencyTemplateRow["type"];
   includedInPlan: boolean;
   sortOrder: number;
 }
 
 /**
- * Core admin action: create a template directly for one agency from
- * admin-authored TSX source (compiled at runtime, see
- * src/lib/dynamic-template.ts). There is no shared catalog to pick from —
- * every template belongs to exactly one agency from the moment it's created,
- * and a new agency starts with zero templates.
+ * Creates a blank scene-based template (Phase C/E) — the only way to create
+ * a template now (the old componentSource "paste TSX" authoring path was
+ * removed entirely, see PLAN_TEMPLATE_EDITOR.md's Phase E follow-up).
+ * `component_source` stays '' (its DB default, never used for a scene row)
+ * and `scenes_by_format` starts null (nothing designed for any format yet);
+ * the admin fills it in on the editor page this redirects to right after
+ * creation. `slide_count` is
+ * meaningless for a scene template (real
+ * slide count is always however many photos the agency picks per post, see
+ * resolveSceneForSlide/Phase B) so it's left at its default of 1 — only
+ * `type` (set explicitly here, not derived from slide_count) drives whether
+ * agencies see it under "Single post" or "Carousel".
  */
-export async function createAgencyTemplate(input: CreateAgencyTemplateInput): Promise<AgencyTemplateRow> {
+export async function createSceneAgencyTemplate(input: CreateSceneAgencyTemplateInput): Promise<AgencyTemplateRow> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("agency_templates")
@@ -82,11 +92,10 @@ export async function createAgencyTemplate(input: CreateAgencyTemplateInput): Pr
       agency_id: input.agencyId,
       name: input.name,
       description: input.description,
-      component_source: input.componentSource,
-      slide_count: input.slideCount,
-      type: input.slideCount > 1 ? "carousel" : "single",
-      post_format: input.postFormat,
-      config: input.config as unknown as Record<string, unknown>,
+      component_source: "",
+      type: input.type,
+      post_format: "feed",
+      config: { brand: { brandColor: "#111827", secondaryColor: "#6b7280" }, fields: {} } as unknown as Record<string, unknown>,
       status: "draft",
       included_in_plan: input.includedInPlan,
       billable_type: input.includedInPlan ? "included" : "regie",
@@ -99,57 +108,30 @@ export async function createAgencyTemplate(input: CreateAgencyTemplateInput): Pr
   return data;
 }
 
-export interface UpdateAgencyTemplateInput {
-  id: string;
-  name?: string;
-  description?: string | null;
-  componentSource?: string;
-  slideCount?: number;
-  config?: TemplateConfig;
-  includedInPlan?: boolean;
-  billableType?: AgencyTemplateRow["billable_type"];
-  sortOrder?: number;
-  previewImageUrl?: string | null;
-}
-
 /**
- * Editing the source invalidates whatever was last validated — reset back to
- * `draft` and clear the persisted compiled CSS so a stale, no-longer-matching
- * render output can never linger under a `published` status. The admin has
- * to explicitly re-run "Valideer & publiceer" (validateAndPublishTemplate)
- * before the edited version becomes selectable by an agency again.
+ * Saves the editor's in-progress scene JSON — resets validation back to
+ * `draft` and clears the persisted compiled CSS, since a scene edit is
+ * exactly as capable of breaking the render as an old componentSource edit
+ * used to be. The whole scenes_by_format object is replaced wholesale each
+ * save (the editor always holds the complete, current in-memory state for
+ * every format/role, see SceneEditor.tsx) — a format or role explicitly
+ * toggled off in the editor is simply absent/null in what gets sent here.
  */
-export async function updateAgencyTemplate(input: UpdateAgencyTemplateInput): Promise<AgencyTemplateRow> {
+export async function updateAgencyTemplateScenes(templateId: string, scenesByFormat: ScenesByFormat): Promise<void> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("agency_templates")
     .update({
-      ...(input.name !== undefined && { name: input.name }),
-      ...(input.description !== undefined && { description: input.description }),
-      ...(input.componentSource !== undefined && {
-        component_source: input.componentSource,
-        status: "draft",
-        compiled_css: null,
-        compiled_css_hash: null,
-        validated_at: null,
-        validation_error: null,
-      }),
-      ...(input.slideCount !== undefined && {
-        slide_count: input.slideCount,
-        type: input.slideCount > 1 ? "carousel" : "single",
-      }),
-      ...(input.config !== undefined && { config: input.config as unknown as Record<string, unknown> }),
-      ...(input.includedInPlan !== undefined && { included_in_plan: input.includedInPlan }),
-      ...(input.billableType !== undefined && { billable_type: input.billableType }),
-      ...(input.sortOrder !== undefined && { sort_order: input.sortOrder }),
-      ...(input.previewImageUrl !== undefined && { preview_image_url: input.previewImageUrl }),
+      scenes_by_format: scenesByFormat,
+      status: "draft",
+      compiled_css: null,
+      compiled_css_hash: null,
+      validated_at: null,
+      validation_error: null,
     })
-    .eq("id", input.id)
-    .select("*")
-    .single();
+    .eq("id", templateId);
 
-  if (error || !data) throw new Error(error?.message ?? "Kon template niet bijwerken.");
-  return data;
+  if (error) throw new Error(error.message);
 }
 
 /** Hides a published template from agencies without discarding its validated state — unarchiveAgencyTemplate restores it to `published` directly, no revalidation needed since the source hasn't changed. */
@@ -165,16 +147,24 @@ export async function unarchiveAgencyTemplate(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** Newest first — for the "Versies" list on the template detail page. Only ever populated for component_source templates, see validateAndPublishTemplate. */
-export async function listTemplateVersions(templateId: string): Promise<AgencyTemplateVersionRow[]> {
+/**
+ * Permanently removes a template. `posts.agency_template_id` is declared
+ * `on delete restrict` (0001_init.sql) — Postgres itself refuses this
+ * delete while any real post (draft or published, ever) still references
+ * the template, surfacing as error code 23503. That's intentional: a
+ * template used by a real post must stay resolvable for that post's own
+ * detail/re-render/re-schedule flows, so deletion is only actually possible
+ * for a template no agency ever used yet. `agency_template_versions` rows
+ * cascade-delete automatically (0013_template_versions.sql).
+ */
+export async function deleteAgencyTemplate(id: string): Promise<{ ok: true } | { ok: false; reason: "in_use" | "unknown"; message: string }> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("agency_template_versions")
-    .select("*")
-    .eq("agency_template_id", templateId)
-    .order("version", { ascending: false });
-  if (error) throw new Error(error.message);
-  return data ?? [];
+  const { error } = await supabase.from("agency_templates").delete().eq("id", id);
+  if (!error) return { ok: true };
+  if (error.code === "23503") {
+    return { ok: false, reason: "in_use", message: "Deze template is al gebruikt in minstens één post en kan daarom niet verwijderd worden. Archiveer de template in plaats daarvan." };
+  }
+  return { ok: false, reason: "unknown", message: error.message };
 }
 
 /**

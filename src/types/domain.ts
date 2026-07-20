@@ -4,7 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Platform, PostStatus, PropertyListingType, PropertyStatus, PropertyType, TemplateStatus } from "./enums";
-import type { Database } from "./database";
+import type { AgencyFontRow, Database } from "./database";
 
 /** Branding config shared by every agency template. Extend rather than fork per layout. */
 export interface TemplateBrandConfig {
@@ -57,9 +57,8 @@ export interface TemplateRenderProps {
   ctaText?: string;
   status: PropertyStatus;
   fields: TemplateFieldVisibility;
-  /** Agency-level custom font (set on the agency's own settings page, not per template) — see DynamicTemplateRenderer.tsx's `.font-brand` injection. */
-  customFontFamily?: string;
-  customFontUrl?: string;
+  /** Agency-level fonts (set on the agency's own settings page, not per template) — any number, see agency_fonts / FontsCard.tsx and DynamicTemplateRenderer.tsx's per-font `@font-face`/`--font-{id}` injection. Same field names as AgencyFontRow so callers can pass query results through unchanged. */
+  fonts: Pick<AgencyFontRow, "id" | "label" | "font_family" | "font_url">[];
 }
 
 // --- CRM mock boundary -----------------------------------------------------

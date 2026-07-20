@@ -3,17 +3,20 @@ import { DynamicTemplateRenderer } from "@/components/templates/DynamicTemplateR
 import { getSlideRenderData } from "@/services/render/renderDataService";
 import { getCompiledCssForTemplate } from "@/lib/render/compile-tailwind";
 import { verifyRenderToken } from "@/lib/render/token";
+import { getFormatScenes, resolveSceneForSlide } from "@/lib/scene/resolveScene";
+import { resolveRenderHeight } from "@/lib/canvas-format";
 
 /**
  * Bare, unauthenticated page rendered by browserRenderService's headless
  * Chromium instance (server-to-server, no user session — see
  * src/lib/render/token.ts for how it's authorized instead of requireRole()).
  * Shows exactly one slide's DynamicTemplateRenderer output at a 1080px-wide
- * canvas (`data-render-canvas`, what Puppeteer screenshots) — the height is
- * the standard 1350 (4:5) unless the post used canvas_mode 'original', in
- * which case it's the pre-computed, pre-clamped canvas_height (see
- * src/lib/canvas-format.ts). Templates are already height-relative
- * (flex/percentage-based), so no template needs to know which case it's in.
+ * canvas (`data-render-canvas`, what Puppeteer screenshots) — the height
+ * comes from resolveRenderHeight() (src/lib/canvas-format.ts): a scene
+ * template's chosen canvas_format if set, else the standard 1350 (4:5)
+ * unless the post used the older canvas_mode 'original'. Templates are
+ * already height-relative (flex/percentage-based), so no template needs to
+ * know which case it's in.
  *
  * Three things make this deterministic, no CDN/DOM-scanning/blind waits
  * needed:
@@ -27,13 +30,12 @@ import { verifyRenderToken } from "@/lib/render/token";
  *      recompiling live — only templates that passed validation are ever
  *      selectable for a real post, so this is normally already populated;
  *      recompiling here is just a defensive fallback for older data. Only
- *      applies to `componentSource` templates — a `templateKey` (git-managed)
- *      template needs none of this, its CSS is already in the app's normal
- *      build output (see the "Templatearchitectuur" migration plan, step 4).
+ *      applies to `componentSource` templates — a scene has nothing to
+ *      compile at all (SceneRenderer paints inline styles).
  *   2. RenderImage (a plain `<img>`) replaces next/image for this page only
  *      — no lazy-loading/optimization behavior to race against. Only applies
- *      to the `componentSource` path; a `templateKey` template imports
- *      next/image directly in its own file and relies on `priority` instead.
+ *      to the `componentSource` path; a scene imports next/image directly
+ *      and relies on `priority` instead.
  */
 export default async function RenderSlidePage({
   params,
@@ -48,17 +50,21 @@ export default async function RenderSlidePage({
   if (!token || !verifyRenderToken(postId, token)) notFound();
 
   const data = await getSlideRenderData(postId);
-  if (!data || (!data.componentSource && !data.templateKey)) notFound();
+  if (!data || (!data.componentSource && !data.scenesByFormat)) notFound();
 
-  const compiledCss = data.templateKey ? null : (data.compiledCss ?? (await getCompiledCssForTemplate(data.componentSource!)));
-  const canvasHeight = data.canvasMode === "original" && data.canvasHeight ? data.canvasHeight : 1350;
+  const scene = data.scenesByFormat
+    ? resolveSceneForSlide(getFormatScenes(data.scenesByFormat, data.canvasFormat), Number(slideIndex) || 0, data.slideCount)
+    : undefined;
+  // Scene templates paint inline styles, not Tailwind classNames — nothing to compile.
+  const compiledCss = scene !== undefined ? null : (data.compiledCss ?? (await getCompiledCssForTemplate(data.componentSource!)));
+  const canvasHeight = resolveRenderHeight({ canvasFormat: data.canvasFormat, canvasMode: data.canvasMode, canvasHeight: data.canvasHeight });
 
   return (
     <>
       {compiledCss && <style dangerouslySetInnerHTML={{ __html: compiledCss }} />}
       <div data-render-canvas="true" className="w-[1080px] overflow-hidden" style={{ height: canvasHeight }}>
         <DynamicTemplateRenderer
-          {...(data.templateKey ? { templateKey: data.templateKey } : { source: data.componentSource! })}
+          {...(scene !== undefined ? { scene } : { source: data.componentSource! })}
           data={data.previewData}
           slideIndex={Number(slideIndex) || 0}
           className="rounded-none shadow-none"

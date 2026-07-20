@@ -4,6 +4,7 @@ import { signRenderToken } from "@/lib/render/token";
 import { screenshotCanvas } from "@/lib/render/screenshotCanvas";
 import { siteUrl } from "@/lib/site-url";
 import { getSlideRenderData } from "@/services/render/renderDataService";
+import { resolveRenderHeight } from "@/lib/canvas-format";
 import type { RenderService, RenderSlideInput, RenderSlideResult } from "./renderService";
 
 /**
@@ -24,7 +25,7 @@ import type { RenderService, RenderSlideInput, RenderSlideResult } from "./rende
 export const browserRenderService: RenderService = {
   async renderSlide(input: RenderSlideInput): Promise<RenderSlideResult> {
     const data = await getSlideRenderData(input.postId);
-    if (!data || (!data.componentSource && !data.templateKey)) {
+    if (!data || (!data.componentSource && !data.scenesByFormat)) {
       // No template (or post not found) — nothing to overlay, the source photo is already the final visual.
       return { renderedImageUrl: input.sourceImageUrl };
     }
@@ -32,7 +33,7 @@ export const browserRenderService: RenderService = {
     const token = signRenderToken(input.postId);
     const url = `${siteUrl()}/internal/render-slide/${input.postId}/${input.slideIndex}?token=${token}`;
     const context = `post ${input.postId} slide ${input.slideIndex}`;
-    const viewportHeight = data.canvasMode === "original" && data.canvasHeight ? data.canvasHeight : 1350;
+    const viewportHeight = resolveRenderHeight({ canvasFormat: data.canvasFormat, canvasMode: data.canvasMode, canvasHeight: data.canvasHeight });
 
     const buffer = await screenshotCanvas(url, context, { viewportHeight });
     const admin = createAdminClient();

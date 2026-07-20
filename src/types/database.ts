@@ -4,6 +4,7 @@
 
 import type {
   BillableType,
+  CanvasFormat,
   ConnectionStatus,
   CrmProvider,
   Platform,
@@ -18,6 +19,7 @@ import type {
   TemplateStatus,
   TemplateType,
 } from "./enums";
+import type { ScenesByFormat } from "./scene";
 
 export type AgencyRow = {
   id: string;
@@ -33,6 +35,16 @@ export type AgencyRow = {
   custom_font_family: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** One of an agency's uploaded fonts — see 0015_agency_fonts.sql. Replaces AgencyRow's single custom_font_url/custom_font_family (kept on the row for now, dropped in a later migration once this is verified against real data). */
+export type AgencyFontRow = {
+  id: string;
+  agency_id: string;
+  label: string;
+  font_url: string;
+  font_family: string;
+  created_at: string;
 };
 
 export type ProfileRow = {
@@ -103,10 +115,10 @@ export type AgencyTemplateRow = {
   agency_id: string;
   name: string;
   description: string | null;
-  /** Admin-authored TSX source, compiled at runtime — see src/lib/dynamic-template.ts. Ignored when template_key is set. */
+  /** Admin-authored TSX source, compiled at runtime — see src/lib/dynamic-template.ts. Legacy: every template is scene-authored now, this is only ever the "" placeholder createSceneAgencyTemplate stamps on a new row. */
   component_source: string;
-  /** When set, this row is sourced from the git-managed src/templates/registry.ts instead of component_source — see src/templates/types.ts. */
-  template_key: string | null;
+  /** JSON scene model, keyed by CanvasFormat (Phase C + formats follow-up) — see src/types/scene.ts. Non-null (with at least one format key) = a scene-based template. */
+  scenes_by_format: ScenesByFormat | null;
   /** 1 = single post, >1 = carousel with that many slides. */
   slide_count: number;
   type: TemplateType;
@@ -127,7 +139,7 @@ export type AgencyTemplateRow = {
   updated_at: string;
 };
 
-/** Snapshot of a component_source template taken at every successful validateAndPublishTemplate() — see templateValidationService.ts. Never created for template_key (git-managed) templates. */
+/** Snapshot of a component_source template taken at every successful validateAndPublishTemplate() — see templateValidationService.ts. Never created for scene-based templates. */
 export type AgencyTemplateVersionRow = {
   id: string;
   agency_template_id: string;
@@ -152,10 +164,12 @@ export type PostRow = {
   platforms: Platform[];
   /** Specific reason the last render attempt failed, set only when status is render_failed. */
   render_error: string | null;
-  /** 'fixed' = the standard 1080x1350 canvas; 'original' = canvas_height drives the render wrapper's height instead. Templated posts only, see canvas-format.ts. */
+  /** 'fixed' = the standard 1080x1350 canvas; 'original' = canvas_height drives the render wrapper's height instead. Legacy component_source/"eigen foto's" posts only — ignored whenever canvas_format is set, see canvas-format.ts. */
   canvas_mode: PostCanvasMode;
   /** Only meaningful when canvas_mode = 'original' — clamped server-side to [565, 1350], see canvas-format.ts. */
   canvas_height: number | null;
+  /** Which of a scene template's designed CanvasFormats this post uses — null for legacy component_source/"eigen foto's" posts, always set for scene-template posts (takes priority over canvas_mode/canvas_height when present). See src/types/scene.ts. */
+  canvas_format: CanvasFormat | null;
   scheduled_at: string | null;
   created_by: string;
   created_at: string;
@@ -188,6 +202,7 @@ export type PostJobRow = {
 
 export type TableName =
   | "agencies"
+  | "agency_fonts"
   | "profiles"
   | "crm_connections"
   | "social_connections"
@@ -208,6 +223,7 @@ export interface Database {
   public: {
     Tables: {
       agencies: Table<AgencyRow>;
+      agency_fonts: Table<AgencyFontRow>;
       profiles: Table<ProfileRow>;
       crm_connections: Table<CrmConnectionRow>;
       social_connections: Table<SocialConnectionRow>;

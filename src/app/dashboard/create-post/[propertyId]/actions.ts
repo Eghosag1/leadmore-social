@@ -9,11 +9,18 @@ import { parseScheduledAt } from "@/lib/scheduled-time";
 import { signQueueToken } from "@/lib/queue/token";
 import { siteUrl } from "@/lib/site-url";
 import { clampCanvasHeight } from "@/lib/canvas-format";
-import type { Platform, PostCanvasMode, PostType } from "@/types/enums";
+import { CANVAS_FORMATS, type CanvasFormat, type Platform, type PostCanvasMode, type PostType } from "@/types/enums";
 
 export interface CreatePostState {
   error: string | null;
 }
+
+// Mirrors CreatePostForm.tsx's maxCarouselPhotos — re-checked server-side,
+// never trust the client-computed selection alone (same principle as
+// clampCanvasHeight below). Instagram's real hard carousel limit is 10; a
+// template with a fixed "end scene" (Phase C) reserves one of those slots
+// for itself, so the effective cap depends on the chosen template.
+const INSTAGRAM_CAROUSEL_LIMIT = 10;
 
 export async function createAndSchedulePostAction(
   propertyId: string,
@@ -82,37 +89,29 @@ export async function createAndSchedulePostAction(
   const titleSource = String(formData.get("titleSource") ?? "title");
   const descriptionSource = String(formData.get("descriptionSource") ?? "description");
 
+  const { data: propertyImages } = await supabase.from("property_images").select("image_url").eq("property_id", propertyId);
+  const validUrls = new Set((propertyImages ?? []).map((i) => i.image_url));
+  const urls = postTypeField === "carousel" ? ownPhotoUrls : coverImageUrl ? [coverImageUrl] : [];
+
+  if (urls.length === 0) {
+    return { error: "Kies minstens één foto voor deze post." };
+  }
+  if (urls.some((url) => !validUrls.has(url))) {
+    return { error: "Ongeldige foto geselecteerd." };
+  }
+
   let agencyTemplateId: string | null = null;
   let postType: PostType = postTypeField;
-  let slides: { imageUrl: string; textContent: Record<string, unknown> }[];
+  let canvasFormat: CanvasFormat | null = null;
 
-  if (mode === "own") {
-    const { data: propertyImages } = await supabase
-      .from("property_images")
-      .select("image_url")
-      .eq("property_id", propertyId);
-    const validUrls = new Set((propertyImages ?? []).map((i) => i.image_url));
-
-    const urls = postTypeField === "carousel" ? ownPhotoUrls : coverImageUrl ? [coverImageUrl] : [];
-    if (urls.length === 0) {
-      return { error: "Kies minstens één foto voor deze post." };
-    }
-    if (urls.some((url) => !validUrls.has(url))) {
-      return { error: "Ongeldige foto geselecteerd." };
-    }
-
-    slides = urls.map((url, index) => ({
-      imageUrl: url,
-      textContent: index === 0 ? { title, titleSource, description, descriptionSource } : { slideIndex: index },
-    }));
-  } else {
-    if (!templateId || !coverImageUrl) {
-      return { error: "Kies een template en foto voor u verdergaat." };
+  if (mode === "template") {
+    if (!templateId) {
+      return { error: "Kies een template voor u verdergaat." };
     }
 
     const { data: template } = await supabase
       .from("agency_templates")
-      .select("id, slide_count, type, agency_id")
+      .select("id, slide_count, type, agency_id, scenes_by_format")
       .eq("id", templateId)
       .eq("agency_id", agencyId)
       .maybeSingle();
@@ -123,11 +122,40 @@ export async function createAndSchedulePostAction(
 
     agencyTemplateId = template.id;
     postType = template.type as PostType;
-    slides = Array.from({ length: template.slide_count }, (_, index) => ({
-      imageUrl: coverImageUrl,
-      textContent: index === 0 ? { title, titleSource, description, descriptionSource } : { slideIndex: index },
-    }));
+
+    const scenesByFormat = template.scenes_by_format ?? {};
+    const designedFormats = CANVAS_FORMATS.filter((format) => {
+      const scenes = scenesByFormat[format];
+      return scenes && (scenes.cover || scenes.content || scenes.end);
+    });
+    const hasEndScene = designedFormats.some((format) => scenesByFormat[format]?.end);
+
+    if (designedFormats.length > 0) {
+      // Scene template — never trust the client-submitted format, it must be
+      // one this template actually has a scene designed for.
+      const submittedFormat = String(formData.get("canvasFormat") ?? "");
+      if (!designedFormats.includes(submittedFormat as CanvasFormat)) {
+        return { error: "Ongeldig formaat geselecteerd." };
+      }
+      canvasFormat = submittedFormat as CanvasFormat;
+    }
+
+    const maxPhotos = hasEndScene ? INSTAGRAM_CAROUSEL_LIMIT - 1 : INSTAGRAM_CAROUSEL_LIMIT;
+    if (urls.length > maxPhotos) {
+      return { error: `Maximaal ${maxPhotos} foto's per carousel.` };
+    }
+  } else if (urls.length > INSTAGRAM_CAROUSEL_LIMIT) {
+    return { error: `Maximaal ${INSTAGRAM_CAROUSEL_LIMIT} foto's per carousel.` };
   }
+
+  // Every slide gets its own chosen photo — was `Array.from({length:
+  // template.slide_count}, () => coverImageUrl)` for templated carousels
+  // (always the same repeated photo); now identical to how "eigen foto's"
+  // already worked, see PLAN_TEMPLATE_EDITOR.md Phase B.
+  const slides = urls.map((url, index) => ({
+    imageUrl: url,
+    textContent: index === 0 ? { title, titleSource, description, descriptionSource } : { slideIndex: index },
+  }));
 
   if (!title) {
     return { error: "Vul een titel in voor u verdergaat." };
@@ -144,6 +172,7 @@ export async function createAndSchedulePostAction(
     platforms,
     canvasMode,
     canvasHeight,
+    canvasFormat,
   });
 
   // The post now exists for real (chosen photo/template/platforms all

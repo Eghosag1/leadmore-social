@@ -2,6 +2,9 @@
 // the server action (re-clamping before persisting) — client-safe, no
 // "server-only", same reasoning as template-render.ts.
 
+import { CANVAS_FORMAT_DIMENSIONS } from "@/types/scene";
+import type { CanvasFormat, PostCanvasMode } from "@/types/enums";
+
 export const CANVAS_WIDTH = 1080;
 // Today's fixed default (4:5).
 export const CANVAS_MAX_HEIGHT = 1350;
@@ -33,4 +36,17 @@ export function computeClampedCanvasHeight(naturalWidth: number, naturalHeight: 
 export function clampCanvasHeight(height: number): number {
   if (!Number.isFinite(height)) return CANVAS_MAX_HEIGHT;
   return Math.min(CANVAS_MAX_HEIGHT, Math.max(CANVAS_MIN_HEIGHT, Math.round(height)));
+}
+
+/**
+ * Single source of truth for "how tall should this post's render canvas
+ * actually be" — width is always CANVAS_WIDTH. `canvasFormat` (set only for
+ * scene-template posts, see 0017_scene_canvas_formats.sql) always wins when
+ * present; canvasMode/canvasHeight (the older mechanism) only matters for
+ * legacy componentSource/"eigen foto's" posts, where canvasFormat is null.
+ */
+export function resolveRenderHeight(post: { canvasFormat: CanvasFormat | null; canvasMode: PostCanvasMode; canvasHeight: number | null }): number {
+  if (post.canvasFormat) return CANVAS_FORMAT_DIMENSIONS[post.canvasFormat].height;
+  if (post.canvasMode === "original" && post.canvasHeight) return post.canvasHeight;
+  return CANVAS_MAX_HEIGHT;
 }

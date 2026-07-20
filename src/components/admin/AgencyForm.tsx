@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LogoUploader } from "@/components/admin/LogoUploader";
-import { FontUploader } from "@/components/admin/FontUploader";
 import type { AgencyFormState } from "@/app/admin/agencies/actions";
 import type { AgencyRow } from "@/types/database";
 
@@ -31,14 +30,6 @@ export function AgencyForm({
       </div>
 
       <LogoUploader fieldName="logoUrl" initialUrl={agency?.logo_url} pathPrefix={pathPrefix} />
-
-      <FontUploader
-        urlFieldName="customFontUrl"
-        familyFieldName="customFontFamily"
-        initialUrl={agency?.custom_font_url}
-        initialFamily={agency?.custom_font_family}
-        pathPrefix={pathPrefix}
-      />
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="websiteUrl">Website (optioneel)</Label>

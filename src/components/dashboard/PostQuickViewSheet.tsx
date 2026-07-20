@@ -19,6 +19,7 @@ import { PostStatusBadge } from "@/components/shared/StatusBadge";
 import { formatDateInputs } from "@/lib/date-inputs";
 import { MANUAL_SOURCE, resolvePropertyField, type FieldSourceValue } from "@/lib/field-binding";
 import { friendlyErrorMessage } from "@/lib/friendly-error";
+import { resolveRenderHeight } from "@/lib/canvas-format";
 import { updatePostAction, cancelPostQuickAction, getPostQuickViewAction, type UpdatePostState } from "@/app/dashboard/posts/[id]/actions";
 import type { PostDetailData } from "@/services/posts/postDetailService";
 import type { Platform } from "@/types/enums";
@@ -154,7 +155,8 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
 
         <PhonePreview
           componentSource={data.componentSource}
-          templateKey={data.templateKey}
+          scenesByFormat={data.scenesByFormat}
+          canvasFormat={data.canvasFormat}
           slideCount={data.slideCount}
           data={data.previewData}
           caption={caption}
@@ -162,7 +164,7 @@ function QuickViewForm({ data, onCancelled, onSaved }: { data: PostDetailData; o
           agencyLogo={data.agencyLogo}
           slideIndex={slideIndex}
           onSlideIndexChange={setSlideIndex}
-          canvasHeight={data.canvasMode === "original" ? data.canvasHeight : null}
+          canvasHeight={resolveRenderHeight({ canvasFormat: data.canvasFormat, canvasMode: data.canvasMode, canvasHeight: data.canvasHeight })}
         />
       </div>
     </div>

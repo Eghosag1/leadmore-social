@@ -3,10 +3,12 @@
 import { useMemo, useState } from "react";
 import { buildTemplateRenderProps } from "@/lib/template-render";
 import { ScaledTemplateCanvas } from "@/components/templates/ScaledTemplateCanvas";
+import { getFormatScenes, isSceneTemplate, resolveSceneForSlide } from "@/lib/scene/resolveScene";
 import { cn } from "@/lib/utils";
-import type { PropertyImageRow, PropertyRow } from "@/types/database";
-import type { TemplateType } from "@/types/enums";
+import type { AgencyFontRow, PropertyImageRow, PropertyRow } from "@/types/database";
+import { CANVAS_FORMATS, type CanvasFormat, type TemplateType } from "@/types/enums";
 import type { TemplateConfig } from "@/types/domain";
+import { CANVAS_FORMAT_DIMENSIONS, type ScenesByFormat } from "@/types/scene";
 
 export interface PreviewPropertyOption {
   property: PropertyRow;
@@ -15,30 +17,37 @@ export interface PreviewPropertyOption {
 
 export function TemplatePreviewClient({
   componentSource,
-  templateKey,
+  scenesByFormat,
   slideCount,
   type,
   config,
   agencyName,
-  customFontFamily,
-  customFontUrl,
+  fonts,
   properties,
 }: {
   componentSource: string | null;
-  /** Set for git-managed (src/templates/registry.ts) templates — mutually exclusive with componentSource, see ScaledTemplateCanvas. */
-  templateKey?: string | null;
+  /** Set (non-null) for scene-based templates (Phase C) — mutually exclusive with componentSource. */
+  scenesByFormat?: ScenesByFormat | null;
   slideCount: number;
   type: TemplateType;
   config: TemplateConfig;
   agencyName: string;
-  customFontFamily?: string;
-  customFontUrl?: string;
+  fonts?: Pick<AgencyFontRow, "id" | "label" | "font_family" | "font_url">[];
   properties: PreviewPropertyOption[];
 }) {
   const [propertyIndex, setPropertyIndex] = useState(0);
   const [slideIndex, setSlideIndex] = useState(0);
+  const isScene = isSceneTemplate(scenesByFormat);
+  const designedFormats = isScene ? CANVAS_FORMATS.filter((format) => scenesByFormat?.[format]) : [];
+  const [canvasFormat, setCanvasFormat] = useState<CanvasFormat>(designedFormats[0] ?? "portrait");
 
   const selected = properties[propertyIndex];
+  // agency_templates.slide_count is meaningless for a scene template (real
+  // slide count always follows the post's own photo count, see Phase B) —
+  // cycle through 3 preview slides instead, enough to show cover/content/end.
+  const effectiveSlideCount = isScene ? 3 : slideCount;
+  const scene = isScene ? resolveSceneForSlide(getFormatScenes(scenesByFormat, canvasFormat), slideIndex, effectiveSlideCount) : undefined;
+  const canvasHeight = isScene ? CANVAS_FORMAT_DIMENSIONS[canvasFormat].height : undefined;
 
   const previewData = useMemo(() => {
     if (!selected) return null;
@@ -47,10 +56,9 @@ export function TemplatePreviewClient({
       images: selected.images,
       config,
       agencyName,
-      customFontFamily,
-      customFontUrl,
+      fonts,
     });
-  }, [selected, config, agencyName, customFontFamily, customFontUrl]);
+  }, [selected, config, agencyName, fonts]);
 
   if (!previewData) {
     return <p className="text-sm text-muted-foreground">Geen voorbeeldpand beschikbaar.</p>;
@@ -75,16 +83,35 @@ export function TemplatePreviewClient({
         </select>
       )}
 
+      {designedFormats.length > 1 && (
+        <div className="inline-flex w-fit rounded-full border border-neutral-200 bg-neutral-50 p-1 text-sm">
+          {designedFormats.map((format) => (
+            <button
+              key={format}
+              type="button"
+              onClick={() => setCanvasFormat(format)}
+              className={cn(
+                "rounded-full px-3 py-1 font-medium transition-colors",
+                canvasFormat === format ? "bg-white text-neutral-900 shadow-sm" : "text-muted-foreground",
+              )}
+            >
+              {CANVAS_FORMAT_DIMENSIONS[format].label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="max-w-sm">
         <ScaledTemplateCanvas
-          {...(templateKey ? { templateKey } : { source: componentSource! })}
+          {...(scene !== undefined ? { scene } : { source: componentSource! })}
           data={previewData}
           slideIndex={slideIndex}
           className="shadow-sm"
+          canvasHeight={canvasHeight}
         />
-        {slideCount > 1 && (
+        {effectiveSlideCount > 1 && (
           <div className="mt-3 flex justify-center gap-1.5">
-            {Array.from({ length: slideCount }, (_, index) => (
+            {Array.from({ length: effectiveSlideCount }, (_, index) => (
               <button
                 key={index}
                 type="button"

@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { PostDetailClient } from "@/components/dashboard/PostDetailClient";
 import { requireRole } from "@/lib/auth";
 import { getPostDetailData } from "@/services/posts/postDetailService";
+import { resolveRenderHeight } from "@/lib/canvas-format";
 
 export default async function PostDetailPage({
   params,
@@ -36,8 +37,9 @@ export default async function PostDetailPage({
         jobs={data.jobs}
         propertyTitle={data.propertyTitle}
         componentSource={data.componentSource}
-        templateKey={data.templateKey}
-        canvasHeight={data.canvasMode === "original" ? data.canvasHeight : null}
+        scenesByFormat={data.scenesByFormat}
+        canvasFormat={data.canvasFormat}
+        canvasHeight={resolveRenderHeight({ canvasFormat: data.canvasFormat, canvasMode: data.canvasMode, canvasHeight: data.canvasHeight })}
         slideCount={data.slideCount}
         previewData={data.previewData}
         agencyName={data.agencyName}

@@ -5,11 +5,15 @@ import { Globe, MoreHorizontal, ThumbsUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScaledTemplateCanvas } from "@/components/templates/ScaledTemplateCanvas";
 import { RawImageSlide } from "@/components/templates/RawImageSlide";
+import { getFormatScenes, resolveSceneForSlide } from "@/lib/scene/resolveScene";
 import type { TemplateRenderProps } from "@/types/domain";
+import type { CanvasFormat } from "@/types/enums";
+import type { ScenesByFormat } from "@/types/scene";
 
 export function FacebookPostMock({
   componentSource,
-  templateKey,
+  scenesByFormat,
+  canvasFormat,
   slideCount,
   data,
   caption,
@@ -21,7 +25,10 @@ export function FacebookPostMock({
 }: {
   /** Null in "eigen foto's" mode — renders the raw photo instead of a compiled template. */
   componentSource: string | null;
-  templateKey?: string | null;
+  /** Set (non-null) when this template uses the JSON scene model (Phase C) instead of source. */
+  scenesByFormat?: ScenesByFormat | null;
+  /** Which of scenesByFormat's designed formats to resolve against. */
+  canvasFormat?: CanvasFormat | null;
   slideCount: number;
   data: TemplateRenderProps;
   caption: string;
@@ -31,6 +38,7 @@ export function FacebookPostMock({
   onSlideIndexChange: (index: number) => void;
   canvasHeight?: number | null;
 }) {
+  const scene = scenesByFormat ? resolveSceneForSlide(getFormatScenes(scenesByFormat, canvasFormat), slideIndex, slideCount) : undefined;
   return (
     <div className="pb-4">
       <div className="flex items-center gap-2 px-3 py-2.5">
@@ -52,9 +60,9 @@ export function FacebookPostMock({
       </p>
 
       <div className="relative w-full">
-        {componentSource || templateKey ? (
+        {componentSource || scene !== undefined ? (
           <ScaledTemplateCanvas
-            {...(templateKey ? { templateKey } : { source: componentSource! })}
+            {...(scene !== undefined ? { scene } : { source: componentSource! })}
             data={data}
             slideIndex={slideIndex}
             className="rounded-none shadow-none"

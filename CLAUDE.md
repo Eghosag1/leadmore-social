@@ -172,23 +172,14 @@ een kapotte template de pagina niet laat crashen).
 - **Live preview tijdens het schrijven**: `TemplateForm` toont de `DynamicTemplateRenderer`-output naast de
   editor, met een voorbeeldpand (`src/data/mock/example-property.ts`), zodat de admin WYSIWYG werkt.
 
-**Tweede, in opbouw zijnde bronpad: git-beheerde templates (`template_key`).** Naast de hierboven beschreven
-DB-string-templates bestaat sinds een proof-of-concept ook een tweede, parallel pad: een template als een echt
-`.tsx`-bestand in `src/templates/<agency-slug>/...`, geregistreerd in `src/templates/registry.ts`
-(`TemplateDefinition[]`, `getTemplateDefinition(templateKey)`). Zo'n bestand is een normale, statisch
-geïmporteerde component die exact hetzelfde `TemplateComponentProps`-contract nakomt, maar wél echte TypeScript-
-controle, echte `import`s (bv. gedeelde bouwstenen als `src/templates/components/AutoSizeText.tsx`) en git-
-geschiedenis krijgt — zie de "Templatearchitectuur"-analyse en het migratieplan voor de volledige onderbouwing.
-`agency_templates.template_key` (nullable, `0011_template_registry_key.sql`) onderscheidt de twee: leeg = het
-bestaande `component_source`-pad; ingevuld = dit registry-pad. `DynamicTemplateRenderer` en
-`ScaledTemplateCanvas` accepteren daarom een union-prop (`source` XOR `templateKey`) en lossen zelf op welk pad
-van toepassing is — elke aanroeper geeft gewoon door welk van de twee de rij heeft. Voor `template_key`-rijen
-slaat zowel de renderpijplijn (`/internal/render-slide`, `/internal/render-template`) als
-`templateValidationService` de runtime-Tailwind-compilatie (`compile-tailwind.ts`) over — Tailwind heeft die
-classNames al bij `npm run build` gezien, er is niets te injecteren. **Dit is vandaag enkel een bewezen PoC** (één
-template, `vastgoed-de-meester/wuustwezel-single.tsx`) — er is nog geen admin-UI om een kantoor aan een
-registry-template te koppelen (gebeurt nu handmatig via SQL); de volledige migratie van bestaande templates en het
-uiteindelijk verwijderen van het `new Function`-compileerpad zijn bewust nog niet gedaan.
+**Er bestond een tweede, git-beheerd bronpad (`template_key`), inmiddels weer geschrapt.** Een proof-of-concept
+liet een template ook als een echt, statisch geïmporteerd `.tsx`-bestand bestaan (`src/templates/registry.ts`),
+i.p.v. enkel als DB-string. Bewust geschrapt (2026-07-19) toen bleek dat het de scene-editor als enige
+aanmaak/bewerk-pad tegensprak: `template_key` vereiste een echt bestand schrijven en deployen, iets wat geen
+enkele admin-UI-flow ooit deed en ook nooit zou kunnen doen. `src/templates/registry.ts`, `src/templates/types.ts`
+en het enige PoC-template (`vastgoed-de-meester/wuustwezel-single.tsx`) zijn verwijderd,
+`agency_templates.template_key` is gedropt (`0018_drop_template_key.sql`) — geen enkele rij had deze ooit ingevuld
+staan.
 
 **Belangrijke afweging — geen sandbox.** De geplakte code draait client-side, ook in de browser van
 agency-gebruikers zodra zij een post maken met die template. `new Function`-uitvoering is géén echte sandbox:
@@ -218,9 +209,9 @@ plain CSS die al in het globale stylesheet zit.
 
 **Templateversiebeheer — enkel voor `component_source`-templates.** Elke geslaagde
 `validateAndPublishTemplate()` (`src/services/templates/templateValidationService.ts`) slaat een snapshot op in
-`agency_template_versions` (`0013_template_versions.sql`, oplopend versienummer per template). Git-beheerde
-(`template_key`) templates krijgen versiebeheer al gratis via git en slaan dus nooit een snapshot op. In
-`TemplateForm.tsx` (enkel `mode="edit"`) kan de admin op een versie klikken om die terug in de editor te laden
+`agency_template_versions` (`0013_template_versions.sql`, oplopend versienummer per template). Een scene-template
+heeft geen `component_source` om te snapshotten en slaat dus nooit zo'n snapshot op. In `TemplateForm.tsx` (enkel
+`mode="edit"`) kan de admin op een versie klikken om die terug in de editor te laden
 (`setSource`/`setSlideCount`, zelfde client-side patroon als de starter-knoppen) — dat overschrijft de live
 template pas na opnieuw expliciet opslaan/valideren, nooit meteen.
 
@@ -601,11 +592,13 @@ navigeren — op Vercel automatisch afgeleid van `VERCEL_URL` als fallback). Opt
    `0009_property_listing_type.sql` (voegt `properties.listing_type` toe — "te koop" vs. "te huur", los van
    `property_type`/`status`) → `0010_instagram_scheduling.sql` (voegt `'publishing'` toe aan `post_status`, de
    claim-status tijdens de Instagram-sweep) → `0011_template_registry_key.sql` (voegt `agency_templates.template_key`
-   toe, nullable — het git-beheerde templatepad, zie "Admin-geschreven React-templates" hierboven) →
+   toe, nullable — het git-beheerde templatepad; sindsdien weer geschrapt, zie `0018` hieronder) →
    `0012_agency_custom_font.sql` (voegt `agencies.custom_font_url`/`custom_font_family` toe + de
    `agency-fonts`-Storage-bucket) → `0013_template_versions.sql` (nieuwe `agency_template_versions`-tabel voor
    templateversiebeheer) → `0014_post_canvas_mode.sql` (voegt `posts.canvas_mode`/`canvas_height` toe, zie
-   "Canvas-formaat per post" hieronder).
+   "Canvas-formaat per post" hieronder) → `0015_agency_fonts.sql` → `0016_template_scenes.sql` →
+   `0017_scene_canvas_formats.sql` → `0018_drop_template_key.sql` (dropt `agency_templates.template_key` weer —
+   het git-beheerde templatepad is geschrapt, zie "Admin-geschreven React-templates" hierboven).
 3. `npm run seed` — vult het project met demo-kantoren, panden, templates en posts (idempotent, veilig opnieuw te
    draaien).
 4. `npm run dev`.

@@ -3,8 +3,10 @@
 import { Component as ReactComponent, useMemo, type ReactNode } from "react";
 import { compileTemplateSource } from "@/lib/dynamic-template";
 import { RenderImage } from "@/components/render/RenderImage";
-import { getTemplateDefinition } from "@/templates/registry";
+import { PlainPhotoSlide } from "@/components/templates/PlainPhotoSlide";
+import SceneRenderer from "@/templates/scene/SceneRenderer";
 import type { TemplateComponentProps } from "./types";
+import type { Scene } from "@/types/scene";
 
 /**
  * `data-template-error` marks this as a failure state for screenshotCanvas.ts
@@ -42,15 +44,30 @@ function fontFormatFromUrl(url: string): string {
 }
 
 /**
- * Declares the agency's custom font (if any) as `@font-face` and exposes it
- * via the fixed `--font-brand` CSS variable — see globals.css's `.font-brand`
- * utility, which every template's className can opt into. One centralized
- * injection point (here, not per-template) since this is agency-level
- * branding, not something an individual template configures — see
- * src/components/admin/FontUploader.tsx and the agency settings page.
+ * Declares every font this agency has uploaded (any number, see
+ * agency_fonts / FontsCard.tsx) as its own `@font-face`, each exposed via a
+ * `--font-{id}` CSS variable so a template — or, going forward, a scene text
+ * element — can pick a specific one (title font vs. body font, ...) instead
+ * of "the one agency font" every template used to share. One centralized
+ * injection point (here, not per-template), since this is agency-level
+ * branding data, not something an individual template configures.
+ *
+ * `--font-brand` is kept as a deprecated alias for the *first* uploaded font
+ * — this was the only CSS variable that existed before agencies could have
+ * more than one font, and wuustwezel-single.tsx's own docstring already
+ * anticipated swapping onto it "if an agency ever uploads one," so nothing
+ * that already opts into `.font-brand` breaks silently.
  */
-function CustomFontStyle({ family, url }: { family: string; url: string }) {
-  const css = `@font-face{font-family:'${family}';src:url('${url}') format('${fontFormatFromUrl(url)}');font-display:swap;}:root{--font-brand:'${family}',ui-sans-serif,system-ui,sans-serif;}`;
+function CustomFontStyles({ fonts }: { fonts: TemplateComponentProps["data"]["fonts"] }) {
+  if (fonts.length === 0) return null;
+  const faces = fonts
+    .map(
+      (font) =>
+        `@font-face{font-family:'${font.font_family}';src:url('${font.font_url}') format('${fontFormatFromUrl(font.font_url)}');font-display:swap;}`,
+    )
+    .join("");
+  const variables = fonts.map((font) => `--font-${font.id}:'${font.font_family}',ui-sans-serif,system-ui,sans-serif;`).join("");
+  const css = `${faces}:root{${variables}--font-brand:var(--font-${fonts[0].id});}`;
   return <style dangerouslySetInnerHTML={{ __html: css }} />;
 }
 
@@ -72,20 +89,24 @@ class TemplateErrorBoundary extends ReactComponent<{ children: ReactNode }, { er
  * Resolves a template reference to a live component and renders it. Two
  * sources, mutually exclusive:
  *   - `source`: admin-authored TSX string, compiled at runtime (see
- *     src/lib/dynamic-template.ts) — the original, still-supported path for
- *     every template that hasn't been migrated to a git file yet.
- *   - `templateKey`: a real, statically-imported component registered in
- *     src/templates/registry.ts — no compilation needed, TypeScript already
- *     checked it at build time. See the "Templatearchitectuur" migration
- *     plan for why both paths coexist during the migration.
+ *     src/lib/dynamic-template.ts) — the legacy path, kept only because
+ *     `createSceneAgencyTemplate` still stamps a (`""`, unused) placeholder
+ *     on every new row; every template is scene-authored now.
+ *   - `scene`: an already-resolved `Scene | null` for this exact slide (see
+ *     resolveSceneForSlide() — the caller picks cover/content/end *before*
+ *     this component ever runs, since only the caller knows the total slide
+ *     count). `null` means this slide's role has no scene defined, so it
+ *     falls back to the plain, unbranded photo (PlainPhotoSlide) — the same
+ *     rendering "eigen foto's" posts already use. A non-null Scene is
+ *     painted by the one shared SceneRenderer.
  *
  * Used both for the admin's own live preview while authoring a DB-string
  * template, and for the agency's post-creation preview — the same resolved
  * component either way. `useRawImage` only affects the `source` path (plain
- * `<img>` instead of next/image, see RenderImage.tsx below) — registry
- * templates import next/image directly in their own file, so there's no
- * runtime hook to swap it; they rely on `priority` + the same img.complete
- * readiness check (screenshotCanvas.ts) instead.
+ * `<img>` instead of next/image, see RenderImage.tsx below) — a scene
+ * imports next/image directly, so there's no runtime hook to swap it; it
+ * relies on `priority` + the same img.complete readiness check
+ * (screenshotCanvas.ts) instead.
  *
  * `RenderImage` is resolved here, inside this already-client component,
  * rather than accepted as a component-reference prop — a Server Component
@@ -93,36 +114,49 @@ class TemplateErrorBoundary extends ReactComponent<{ children: ReactNode }, { er
  * the server/client boundary (React rejects it at runtime), so the caller
  * only ever passes the serializable `useRawImage` boolean.
  */
-type TemplateReference = { source: string; templateKey?: undefined } | { templateKey: string; source?: undefined };
+type TemplateReference = { source: string; scene?: undefined } | { scene: Scene | null; source?: undefined };
 
 export function DynamicTemplateRenderer({
   source,
-  templateKey,
+  scene,
   useRawImage,
   ...rendererProps
 }: TemplateComponentProps & TemplateReference & { useRawImage?: boolean }) {
+  // Hooks must run unconditionally regardless of which reference kind was
+  // passed, so the scene branch is resolved and rendered *after* this memo
+  // rather than via an early return above it — the memo itself is simply a
+  // no-op (never read) whenever `scene` is in play.
   const result = useMemo(() => {
-    if (templateKey) {
-      const definition = getTemplateDefinition(templateKey);
-      if (!definition) return { component: null, error: `Onbekende template: "${templateKey}".` };
-      return { component: definition.Component, error: null as string | null };
-    }
+    if (scene !== undefined) return { component: null, error: null as string | null };
     try {
       return { component: compileTemplateSource(source!, useRawImage ? RenderImage : undefined), error: null as string | null };
     } catch (error) {
       return { component: null, error: (error as Error).message };
     }
-  }, [source, templateKey, useRawImage]);
+  }, [source, scene, useRawImage]);
+
+  const { data, slideIndex, className } = rendererProps;
+
+  if (scene !== undefined) {
+    if (scene === null) {
+      return <PlainPhotoSlide imageUrl={data.images[slideIndex ?? 0] ?? data.images[0]} className={className} />;
+    }
+    return (
+      <TemplateErrorBoundary key={JSON.stringify(scene)}>
+        <CustomFontStyles fonts={data.fonts} />
+        <SceneRenderer data={data} slideIndex={slideIndex} className={className} scene={scene} />
+      </TemplateErrorBoundary>
+    );
+  }
 
   if (!result.component) {
     return <TemplateErrorDisplay message={result.error ?? "Onbekende fout."} />;
   }
 
   const Template = result.component;
-  const { data } = rendererProps;
   return (
-    <TemplateErrorBoundary key={source ?? templateKey}>
-      {data.customFontFamily && data.customFontUrl && <CustomFontStyle family={data.customFontFamily} url={data.customFontUrl} />}
+    <TemplateErrorBoundary key={source}>
+      <CustomFontStyles fonts={data.fonts} />
       <Template {...rendererProps} />
     </TemplateErrorBoundary>
   );

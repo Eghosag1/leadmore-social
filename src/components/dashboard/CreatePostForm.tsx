@@ -16,13 +16,26 @@ import { buildRawPhotoRenderProps, buildTemplateRenderProps } from "@/lib/templa
 import { MANUAL_SOURCE, resolvePropertyField, type FieldSourceValue } from "@/lib/field-binding";
 import { computeClampedCanvasHeight } from "@/lib/canvas-format";
 import { createAndSchedulePostAction, type CreatePostState } from "@/app/dashboard/create-post/[propertyId]/actions";
-import type { PropertyImageRow, PropertyRow } from "@/types/database";
+import type { AgencyFontRow, PropertyImageRow, PropertyRow } from "@/types/database";
 import type { AgencyTemplateForCustomer } from "@/services/templates/templateService";
-import type { Platform, PostCanvasMode, TemplateType } from "@/types/enums";
+import { CANVAS_FORMATS, type CanvasFormat, type Platform, type PostCanvasMode, type TemplateType } from "@/types/enums";
+import { CANVAS_FORMAT_DIMENSIONS, type ScenesByFormat, type TemplateScenes } from "@/types/scene";
 
 const TYPE_LABELS: Record<TemplateType, string> = { single: "Single post", carousel: "Carousel" };
 const PLATFORM_LABELS: Record<Platform, string> = { facebook: "Facebook", instagram: "Instagram" };
 const POST_TYPES: TemplateType[] = ["single", "carousel"];
+// Instagram's real hard carousel limit is 10 items. A template with a fixed
+// "end scene" closing card (Phase C) reserves one of those slots for itself,
+// so agency-picked photos are capped at 9 in that case — every other
+// template (or "eigen foto's", which has no scenes at all) gets the full 10.
+
+function hasAnyScene(scenes: TemplateScenes | undefined): boolean {
+  return !!scenes && (!!scenes.cover || !!scenes.content || !!scenes.end);
+}
+
+function designedFormats(scenesByFormat: ScenesByFormat | null | undefined): CanvasFormat[] {
+  return CANVAS_FORMATS.filter((format) => hasAnyScene(scenesByFormat?.[format]));
+}
 
 const initialState: CreatePostState = { error: null };
 
@@ -32,8 +45,7 @@ export function CreatePostForm({
   templates,
   agencyName,
   agencyLogo,
-  customFontFamily,
-  customFontUrl,
+  fonts,
   metaConnected,
   returnTo,
   initialDate,
@@ -43,8 +55,7 @@ export function CreatePostForm({
   templates: AgencyTemplateForCustomer[];
   agencyName: string;
   agencyLogo?: string;
-  customFontFamily?: string;
-  customFontUrl?: string;
+  fonts?: Pick<AgencyFontRow, "id" | "label" | "font_family" | "font_url">[];
   metaConnected: boolean;
   /** Where "Terug" should go — forwarded from the page that linked here (properties list vs. property detail). */
   returnTo?: string;
@@ -63,7 +74,35 @@ export function CreatePostForm({
   const selectedTemplate =
     mode === "template" ? (templates.find((t) => t.id === selectedTemplateId) ?? templatesForType[0] ?? null) : null;
 
-  const isOwnCarousel = mode === "own" && selectedType === "carousel";
+  // Multi-select photo picking — was "own" mode only ("eigen foto's"), now
+  // also applies to template carousels: today a templated carousel reused
+  // the same single cover photo for every slide (agency_templates.slide_count
+  // drove a fixed Array.from(...)), which is exactly the "1 foto voor hele
+  // carousel is sowieso niet top" limitation confirmed with the user. See
+  // PLAN_TEMPLATE_EDITOR.md Phase B.
+  const isMultiPhotoCarousel = selectedType === "carousel" && (mode === "own" || mode === "template");
+  const templateDesignedFormats = selectedTemplate ? designedFormats(selectedTemplate.scenes_by_format) : [];
+  const isSceneTemplate = mode === "template" && templateDesignedFormats.length > 0;
+  // Reserve a photo slot for a fixed "end scene" closing card if *any*
+  // designed format has one — conservative (checked across all formats, not
+  // just the one currently selected below) so the cap can never be
+  // undercounted for whichever format the agency ends up picking.
+  const maxCarouselPhotos =
+    isSceneTemplate && templateDesignedFormats.some((format) => selectedTemplate!.scenes_by_format?.[format]?.end) ? 9 : 10;
+
+  // Which of the template's designed CanvasFormats this post uses — only
+  // meaningful for scene templates (isSceneTemplate); legacy componentSource
+  // templates keep using canvasMode below instead. Reset whenever the
+  // selected template changes, same "adjust state during render" pattern as
+  // the rest of this component.
+  const [canvasFormat, setCanvasFormat] = useState<CanvasFormat>(templateDesignedFormats[0] ?? "portrait");
+  const [lastTemplateIdForFormat, setLastTemplateIdForFormat] = useState(selectedTemplate?.id ?? null);
+  if (lastTemplateIdForFormat !== (selectedTemplate?.id ?? null)) {
+    setLastTemplateIdForFormat(selectedTemplate?.id ?? null);
+    if (templateDesignedFormats.length > 0 && !templateDesignedFormats.includes(canvasFormat)) {
+      setCanvasFormat(templateDesignedFormats[0]);
+    }
+  }
 
   const [postNow, setPostNow] = useState(false);
 
@@ -134,31 +173,49 @@ export function CreatePostForm({
   }
 
   function toggleOwnPhoto(url: string) {
-    setSelectedPhotoUrls((prev) => (prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]));
+    setSelectedPhotoUrls((prev) => {
+      if (prev.includes(url)) return prev.filter((u) => u !== url);
+      if (prev.length >= maxCarouselPhotos) return prev;
+      return [...prev, url];
+    });
   }
 
-  const ownImages = isOwnCarousel ? selectedPhotoUrls : coverImageUrl ? [coverImageUrl] : [];
+  const ownImages = isMultiPhotoCarousel ? selectedPhotoUrls : coverImageUrl ? [coverImageUrl] : [];
 
   const previewData =
     mode === "template" && selectedTemplate
-      ? buildTemplateRenderProps({
-          property,
-          images,
-          config: selectedTemplate.config,
-          agencyName,
-          customFontFamily,
-          customFontUrl,
-          overrides: { title, description, coverImageUrl: coverImageUrl ?? undefined },
-        })
+      ? {
+          ...buildTemplateRenderProps({
+            property,
+            images,
+            config: selectedTemplate.config,
+            agencyName,
+            fonts,
+            overrides: { title, description, coverImageUrl: coverImageUrl ?? undefined },
+          }),
+          // Override with the actually-chosen photos in the order the user
+          // picked them — buildTemplateRenderProps's own `images` defaults to
+          // every property photo (cover-first), which is the wrong list once
+          // a carousel can use N distinct, user-ordered photos per slide.
+          images: ownImages.length > 0 ? ownImages : images.map((i) => i.image_url),
+        }
       : buildRawPhotoRenderProps({ property, images: ownImages, agencyName });
 
   const previewComponentSource = mode === "template" && selectedTemplate ? selectedTemplate.component_source : null;
-  const previewTemplateKey = mode === "template" && selectedTemplate ? selectedTemplate.template_key : null;
-  const previewSlideCount = mode === "template" && selectedTemplate ? selectedTemplate.slide_count : Math.max(ownImages.length, 1);
+  const previewScenesByFormat: ScenesByFormat | null = isSceneTemplate ? (selectedTemplate!.scenes_by_format ?? null) : null;
+  // Real slide count is now however many photos were chosen (min 1), not the
+  // template's own agency_templates.slide_count — see Phase B note above.
+  const previewSlideCount = Math.max(ownImages.length, 1);
+  // A scene template's chosen CanvasFormat always wins over the legacy
+  // fixed/original canvasMode toggle below (which only applies to
+  // componentSource templates) — see resolveRenderHeight's server-side
+  // counterpart in src/lib/canvas-format.ts.
+  const previewCanvasHeight = isSceneTemplate ? CANVAS_FORMAT_DIMENSIONS[canvasFormat].height : computedCanvasHeight;
 
   const hasValidSelection =
-    (mode === "template" ? !!selectedTemplate && !!coverImageUrl : isOwnCarousel ? selectedPhotoUrls.length > 0 : !!coverImageUrl) &&
-    !(mode === "template" && canvasMode === "original" && !computedCanvasHeight);
+    (mode === "template" ? !!selectedTemplate : true) &&
+    (isMultiPhotoCarousel ? selectedPhotoUrls.length > 0 : !!coverImageUrl) &&
+    !(mode === "template" && !isSceneTemplate && canvasMode === "original" && !computedCanvasHeight);
 
   function togglePlatform(platform: Platform) {
     setPlatforms((prev) => {
@@ -184,16 +241,17 @@ export function CreatePostForm({
         <input type="hidden" name="templateId" value={mode === "template" ? selectedTemplate?.id ?? "" : ""} />
         <input type="hidden" name="postType" value={selectedType} />
         <input type="hidden" name="coverImageUrl" value={coverImageUrl ?? ""} />
-        {isOwnCarousel && selectedPhotoUrls.map((url) => <input key={url} type="hidden" name="ownPhotoUrls" value={url} />)}
+        {isMultiPhotoCarousel && selectedPhotoUrls.map((url) => <input key={url} type="hidden" name="ownPhotoUrls" value={url} />)}
         <input type="hidden" name="caption" value={caption} />
         <input type="hidden" name="title" value={title} />
         <input type="hidden" name="titleSource" value={titleSource} />
         <input type="hidden" name="description" value={description} />
         <input type="hidden" name="descriptionSource" value={descriptionSource} />
-        <input type="hidden" name="canvasMode" value={mode === "template" ? canvasMode : "fixed"} />
-        {mode === "template" && canvasMode === "original" && computedCanvasHeight && (
+        <input type="hidden" name="canvasMode" value={mode === "template" && !isSceneTemplate ? canvasMode : "fixed"} />
+        {mode === "template" && !isSceneTemplate && canvasMode === "original" && computedCanvasHeight && (
           <input type="hidden" name="canvasHeight" value={computedCanvasHeight} />
         )}
+        {isSceneTemplate && <input type="hidden" name="canvasFormat" value={canvasFormat} />}
 
         <div className="flex flex-col gap-6">
           <Card>
@@ -311,23 +369,24 @@ export function CreatePostForm({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">4. {isOwnCarousel ? "Foto's" : "Foto"}</CardTitle>
+              <CardTitle className="text-base">4. {isMultiPhotoCarousel ? "Foto's" : "Foto"}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              {isOwnCarousel && (
+              {isMultiPhotoCarousel && (
                 <p className="text-xs text-muted-foreground">
-                  Kies de foto&apos;s in de gewenste volgorde. Klik nogmaals om een foto te verwijderen.
+                  Kies de foto&apos;s in de gewenste volgorde (max {maxCarouselPhotos}). Klik nogmaals om een foto te
+                  verwijderen.
                 </p>
               )}
               <div className="grid grid-cols-4 gap-2">
                 {images.map((image) => {
-                  const selected = isOwnCarousel ? selectedPhotoUrls.includes(image.image_url) : coverImageUrl === image.image_url;
-                  const orderIndex = isOwnCarousel ? selectedPhotoUrls.indexOf(image.image_url) : -1;
+                  const selected = isMultiPhotoCarousel ? selectedPhotoUrls.includes(image.image_url) : coverImageUrl === image.image_url;
+                  const orderIndex = isMultiPhotoCarousel ? selectedPhotoUrls.indexOf(image.image_url) : -1;
                   return (
                     <button
                       key={image.id}
                       type="button"
-                      onClick={() => (isOwnCarousel ? toggleOwnPhoto(image.image_url) : setCoverImageUrl(image.image_url))}
+                      onClick={() => (isMultiPhotoCarousel ? toggleOwnPhoto(image.image_url) : setCoverImageUrl(image.image_url))}
                       className={cn(
                         "relative aspect-square overflow-hidden rounded-md border-2",
                         selected ? "border-neutral-900" : "border-transparent",
@@ -359,7 +418,38 @@ export function CreatePostForm({
             </CardContent>
           </Card>
 
-          {mode === "template" && (
+          {mode === "template" && isSceneTemplate && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">5. Formaat</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <div className="flex gap-2">
+                  {templateDesignedFormats.map((format) => (
+                    <button
+                      key={format}
+                      type="button"
+                      onClick={() => setCanvasFormat(format)}
+                      className={cn(
+                        "rounded-md border px-4 py-2 text-sm font-medium transition-colors",
+                        canvasFormat === format
+                          ? "border-neutral-900 bg-neutral-900 text-white"
+                          : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50",
+                      )}
+                    >
+                      {CANVAS_FORMAT_DIMENSIONS[format].label} ({CANVAS_FORMAT_DIMENSIONS[format].ratioLabel})
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Deze template is ontworpen voor {templateDesignedFormats.length === 1 ? "dit formaat" : "deze formaten"} —
+                  neem contact op met de platformbeheerder voor andere formaten.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {mode === "template" && !isSceneTemplate && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">5. Formaat</CardTitle>
@@ -504,7 +594,8 @@ export function CreatePostForm({
           {ownImages.length > 0 || (mode === "template" && selectedTemplate) ? (
             <PhonePreview
               componentSource={previewComponentSource}
-              templateKey={previewTemplateKey}
+              scenesByFormat={previewScenesByFormat}
+              canvasFormat={isSceneTemplate ? canvasFormat : null}
               slideCount={previewSlideCount}
               data={previewData}
               caption={caption}
@@ -512,7 +603,7 @@ export function CreatePostForm({
               agencyLogo={agencyLogo}
               slideIndex={slideIndex}
               onSlideIndexChange={setSlideIndex}
-              canvasHeight={computedCanvasHeight}
+              canvasHeight={previewCanvasHeight}
             />
           ) : (
             <p className="text-sm text-muted-foreground">Kies een template of foto om een preview te zien.</p>

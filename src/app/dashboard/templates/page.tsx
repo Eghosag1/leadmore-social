@@ -7,16 +7,18 @@ import { createClient } from "@/lib/supabase/server";
 import { listActiveAgencyTemplatesForCustomer } from "@/services/templates/templateService";
 import { buildTemplateRenderProps } from "@/lib/template-render";
 import { EXAMPLE_PROPERTY, EXAMPLE_PROPERTY_IMAGES } from "@/data/mock/example-property";
+import { CANVAS_FORMATS } from "@/types/enums";
 
 export default async function TemplatesGalleryPage() {
   const current = await requireRole(["agency_admin", "agency_user"]);
   const agencyId = current.profile.agency_id!;
   const supabase = await createClient();
 
-  const [templates, { data: agency }, { data: sampleProperty }] = await Promise.all([
+  const [templates, { data: agency }, { data: sampleProperty }, { data: fonts }] = await Promise.all([
     listActiveAgencyTemplatesForCustomer(agencyId),
-    supabase.from("agencies").select("name, logo_url, custom_font_url, custom_font_family").eq("id", agencyId).single(),
+    supabase.from("agencies").select("name, logo_url").eq("id", agencyId).single(),
     supabase.from("properties").select("*").eq("agency_id", agencyId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabase.from("agency_fonts").select("*").eq("agency_id", agencyId),
   ]);
 
   const property = sampleProperty ?? EXAMPLE_PROPERTY;
@@ -42,13 +44,18 @@ export default async function TemplatesGalleryPage() {
               images,
               config: template.config,
               agencyName: agency?.name ?? "",
-              customFontFamily: agency?.custom_font_family,
-              customFontUrl: agency?.custom_font_url,
+              fonts: fonts ?? [],
             });
+            // Thumbnail always shows the cover scene of the first designed
+            // format — just a representative preview, not tied to any post's
+            // actual chosen format.
+            const firstDesignedFormat = CANVAS_FORMATS.find((format) => template.scenes_by_format?.[format]);
             return (
               <Card key={template.id} className="overflow-hidden py-0">
                 <ScaledTemplateCanvas
-                  {...(template.template_key ? { templateKey: template.template_key } : { source: template.component_source })}
+                  {...(firstDesignedFormat
+                    ? { scene: template.scenes_by_format![firstDesignedFormat]!.cover }
+                    : { source: template.component_source })}
                   data={previewData}
                   className="rounded-none shadow-none"
                 />

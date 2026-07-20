@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DynamicTemplateRenderer } from "./DynamicTemplateRenderer";
 import type { TemplateComponentProps } from "./types";
+import type { Scene } from "@/types/scene";
 
 const NATIVE_WIDTH = 1080;
 const NATIVE_HEIGHT = 1350; // 4:5 — matches the internal render-slide/render-template canvas
@@ -22,16 +23,16 @@ const NATIVE_HEIGHT = 1350; // 4:5 — matches the internal render-slide/render-
  * it works in fixed-width contexts (the phone mockup) and fully responsive
  * ones (the template gallery grid) alike, with no per-caller magic numbers.
  */
-type TemplateReference = { source: string; templateKey?: undefined } | { templateKey: string; source?: undefined };
+type TemplateReference = { source: string; scene?: undefined } | { scene: Scene | null; source?: undefined };
 
 export function ScaledTemplateCanvas({
   source,
-  templateKey,
+  scene,
   data,
   slideIndex,
   className,
   canvasHeight,
-}: TemplateReference & TemplateComponentProps & { /** Overrides NATIVE_HEIGHT — set when the post uses canvas_mode 'original'. */ canvasHeight?: number | null }) {
+}: TemplateReference & TemplateComponentProps & { /** Overrides NATIVE_HEIGHT — set when the post uses canvas_mode 'original', or to a scene's designed CanvasFormat height. */ canvasHeight?: number | null }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
   const height = canvasHeight ?? NATIVE_HEIGHT;
@@ -51,7 +52,7 @@ export function ScaledTemplateCanvas({
     <div ref={containerRef} className="relative w-full overflow-hidden" style={{ aspectRatio: `${NATIVE_WIDTH} / ${height}` }}>
       <div style={{ width: NATIVE_WIDTH, height, transform: `scale(${scale})`, transformOrigin: "top left" }}>
         <DynamicTemplateRenderer
-          {...(templateKey ? { templateKey } : { source: source! })}
+          {...(scene !== undefined ? { scene } : { source: source! })}
           data={data}
           slideIndex={slideIndex}
           className={className}

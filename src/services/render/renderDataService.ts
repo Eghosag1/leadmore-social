@@ -3,17 +3,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { buildTemplateRenderProps } from "@/lib/template-render";
 import { EXAMPLE_PROPERTY, EXAMPLE_PROPERTY_IMAGES } from "@/data/mock/example-property";
 import type { TemplateConfig, TemplateRenderProps } from "@/types/domain";
-import type { PostCanvasMode } from "@/types/enums";
+import type { CanvasFormat, PostCanvasMode } from "@/types/enums";
+import type { ScenesByFormat } from "@/types/scene";
 
 export interface SlideRenderData {
   /** Null for "eigen foto's" posts — nothing to render, callers should skip the browser step entirely. */
   componentSource: string | null;
-  /** Set when this template is sourced from src/templates/registry.ts instead of componentSource — see the "Templatearchitectuur" migration plan. */
-  templateKey: string | null;
+  /** Non-null when this template uses the JSON scene model (Phase C). Resolve the actual per-slide Scene via getFormatScenes(scenesByFormat, canvasFormat) + resolveSceneForSlide(). */
+  scenesByFormat: ScenesByFormat | null;
+  /** Which of the template's designed formats this specific post uses — always set alongside a non-null scenesByFormat, see 0017_scene_canvas_formats.sql. */
+  canvasFormat: CanvasFormat | null;
+  /** How many slides this post actually has — needed alongside `scenesByFormat`/`canvasFormat` to resolve which of cover/content/end applies to one specific slideIndex, see resolveSceneForSlide(). */
+  slideCount: number;
   previewData: TemplateRenderProps;
-  /** Server-compiled CSS already persisted on the template row (see templateValidationService), if it was ever validated. Null for templates saved before validation existed, and always null for templateKey-sourced templates (their CSS comes from the app's normal build, not runtime compilation). */
+  /** Server-compiled CSS already persisted on the template row (see templateValidationService), if it was ever validated. Null for templates saved before validation existed. */
   compiledCss: string | null;
-  /** 'fixed' = the constant 1080x1350 canvas; 'original' = derive the render wrapper's height from canvasHeight. Real-post path only — TemplateValidationRenderData deliberately has no equivalent, template validation always certifies the one standard canvas. */
+  /** 'fixed' = the constant 1080x1350 canvas; 'original' = derive the render wrapper's height from canvasHeight. Legacy componentSource/"eigen foto's" posts only — ignored whenever canvasFormat is set. */
   canvasMode: PostCanvasMode;
   canvasHeight: number | null;
 }
@@ -32,37 +37,41 @@ export async function getSlideRenderData(postId: string): Promise<SlideRenderDat
   const { data: post } = await admin.from("posts").select("*").eq("id", postId).maybeSingle();
   if (!post || !post.agency_template_id) return null;
 
-  const [{ data: property }, { data: agency }, { data: slides }] = await Promise.all([
+  const [{ data: property }, { data: agency }, { data: slides }, { data: fonts }] = await Promise.all([
     admin.from("properties").select("*").eq("id", post.property_id).maybeSingle(),
-    admin.from("agencies").select("name, logo_url, custom_font_url, custom_font_family").eq("id", post.agency_id).single(),
+    admin.from("agencies").select("name, logo_url").eq("id", post.agency_id).single(),
     admin.from("post_slides").select("*").eq("post_id", postId).order("sort_order"),
+    admin.from("agency_fonts").select("*").eq("agency_id", post.agency_id),
   ]);
   if (!property) return null;
 
   const { data: template } = await admin.from("agency_templates").select("*").eq("id", post.agency_template_id).maybeSingle();
   if (!template) return null;
 
-  const { data: images } = await admin.from("property_images").select("*").eq("property_id", property.id);
   const firstSlide = slides?.[0];
   const slideText = (firstSlide?.text_content ?? {}) as { title?: string; description?: string | null };
 
   const previewData = buildTemplateRenderProps({
     property,
-    images: images ?? [],
+    // This post's own chosen photos, in slide order — not every property
+    // photo. A templated carousel now uses N distinct, user-picked photos
+    // (one per slide, see actions.ts/CreatePostForm.tsx), so data.images[N]
+    // must resolve to slide N's own photo, not some property-wide list.
+    images: (slides ?? []).map((s) => ({ image_url: s.image_url, sort_order: s.sort_order })),
     config: template.config as unknown as TemplateConfig,
     agencyName: agency?.name ?? "",
-    customFontFamily: agency?.custom_font_family,
-    customFontUrl: agency?.custom_font_url,
+    fonts: fonts ?? [],
     overrides: {
       title: slideText.title,
       description: slideText.description ?? undefined,
-      coverImageUrl: firstSlide?.image_url,
     },
   });
 
   return {
     componentSource: template.component_source,
-    templateKey: template.template_key,
+    scenesByFormat: template.scenes_by_format,
+    canvasFormat: post.canvas_format,
+    slideCount: Math.max(slides?.length ?? 1, 1),
     previewData,
     compiledCss: template.compiled_css,
     canvasMode: post.canvas_mode,
@@ -72,7 +81,8 @@ export async function getSlideRenderData(postId: string): Promise<SlideRenderDat
 
 export interface TemplateValidationRenderData {
   componentSource: string;
-  templateKey: string | null;
+  /** Non-null when this template uses the JSON scene model (Phase C) — see /internal/render-template-scene, which picks one format+role out of this. */
+  scenesByFormat: ScenesByFormat | null;
   previewData: TemplateRenderProps;
 }
 
@@ -89,20 +99,22 @@ export async function getTemplateValidationRenderData(templateId: string): Promi
   const { data: template } = await admin.from("agency_templates").select("*").eq("id", templateId).maybeSingle();
   if (!template) return null;
 
-  const { data: agency } = await admin
-    .from("agencies")
-    .select("name, custom_font_url, custom_font_family")
-    .eq("id", template.agency_id)
-    .maybeSingle();
+  const [{ data: agency }, { data: fonts }] = await Promise.all([
+    admin.from("agencies").select("name").eq("id", template.agency_id).maybeSingle(),
+    admin.from("agency_fonts").select("*").eq("agency_id", template.agency_id),
+  ]);
 
   const previewData = buildTemplateRenderProps({
     property: EXAMPLE_PROPERTY,
     images: EXAMPLE_PROPERTY_IMAGES,
     config: template.config as unknown as TemplateConfig,
     agencyName: agency?.name ?? "",
-    customFontFamily: agency?.custom_font_family,
-    customFontUrl: agency?.custom_font_url,
+    fonts: fonts ?? [],
   });
 
-  return { componentSource: template.component_source, templateKey: template.template_key, previewData };
+  return {
+    componentSource: template.component_source,
+    scenesByFormat: template.scenes_by_format,
+    previewData,
+  };
 }

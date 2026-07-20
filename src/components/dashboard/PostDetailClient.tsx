@@ -19,7 +19,8 @@ import { friendlyErrorMessage } from "@/lib/friendly-error";
 import { updatePostAction, type UpdatePostState } from "@/app/dashboard/posts/[id]/actions";
 import type { PropertyRow } from "@/types/database";
 import type { TemplateRenderProps } from "@/types/domain";
-import type { Platform, PostStatus } from "@/types/enums";
+import type { CanvasFormat, Platform, PostStatus } from "@/types/enums";
+import type { ScenesByFormat } from "@/types/scene";
 
 const PLATFORM_LABEL: Record<Platform, string> = { facebook: "Facebook", instagram: "Instagram" };
 
@@ -32,7 +33,8 @@ export function PostDetailClient({
   jobs,
   propertyTitle,
   componentSource,
-  templateKey,
+  scenesByFormat,
+  canvasFormat,
   canvasHeight,
   slideCount,
   previewData,
@@ -50,7 +52,8 @@ export function PostDetailClient({
   jobs: { platform: Platform; status: PostStatus; error_message: string | null }[];
   propertyTitle: string;
   componentSource: string | null;
-  templateKey?: string | null;
+  scenesByFormat?: ScenesByFormat | null;
+  canvasFormat?: CanvasFormat | null;
   canvasHeight?: number | null;
   slideCount: number;
   previewData: TemplateRenderProps;
@@ -199,7 +202,8 @@ export function PostDetailClient({
       <div className="lg:sticky lg:top-8 lg:self-start">
         <PhonePreview
           componentSource={componentSource}
-          templateKey={templateKey}
+          scenesByFormat={scenesByFormat}
+          canvasFormat={canvasFormat}
           slideCount={slideCount}
           data={previewData}
           caption={caption}

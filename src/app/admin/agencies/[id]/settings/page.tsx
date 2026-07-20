@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { AgencyForm } from "@/components/admin/AgencyForm";
+import { FontsCard } from "@/components/admin/FontsCard";
 import { MetaConnectionForm } from "@/components/admin/MetaConnectionForm";
 import { CopyMetaLinkButton } from "@/components/admin/CopyMetaLinkButton";
 import { BusinessManagerConnectForm } from "@/components/admin/BusinessManagerConnectForm";
@@ -20,6 +21,8 @@ import {
   updateAgencyCrmConnectionAction,
   startMetaConnectAction,
   connectAgencyViaBusinessManagerAction,
+  addAgencyFontAction,
+  removeAgencyFontAction,
 } from "../../actions";
 
 export default async function AgencySettingsPage({
@@ -37,10 +40,11 @@ export default async function AgencySettingsPage({
   const { data: agency } = await supabase.from("agencies").select("*").eq("id", id).maybeSingle();
   if (!agency) notFound();
 
-  const [{ data: crmConnection }, { data: metaConnection }, { count: propertyCount }] = await Promise.all([
+  const [{ data: crmConnection }, { data: metaConnection }, { count: propertyCount }, { data: fonts }] = await Promise.all([
     supabase.from("crm_connections").select("*").eq("agency_id", id).maybeSingle(),
     supabase.from("social_connections").select("*").eq("agency_id", id).eq("provider", "meta").maybeSingle(),
     supabase.from("properties").select("id", { count: "exact", head: true }).eq("agency_id", id),
+    supabase.from("agency_fonts").select("*").eq("agency_id", id).order("created_at"),
   ]);
 
   const boundUpdate = updateAgencyAction.bind(null, agency.id);
@@ -49,6 +53,8 @@ export default async function AgencySettingsPage({
   const boundCrmUpdate = updateAgencyCrmConnectionAction.bind(null, agency.id);
   const boundMetaConnect = startMetaConnectAction.bind(null, agency.id);
   const boundBusinessManagerConnect = connectAgencyViaBusinessManagerAction.bind(null, agency.id);
+  const boundAddFont = addAgencyFontAction.bind(null, agency.id);
+  const boundRemoveFont = removeAgencyFontAction.bind(null, agency.id);
 
   return (
     <div>
@@ -60,14 +66,18 @@ export default async function AgencySettingsPage({
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Huisstijl</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AgencyForm action={boundUpdate} agency={agency} pathPrefix={agency.id} submitLabel="Wijzigingen opslaan" />
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Huisstijl</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AgencyForm action={boundUpdate} agency={agency} pathPrefix={agency.id} submitLabel="Wijzigingen opslaan" />
+            </CardContent>
+          </Card>
+
+          <FontsCard agencyId={agency.id} fonts={fonts ?? []} addAction={boundAddFont} removeAction={boundRemoveFont} />
+        </div>
 
         <div className="flex flex-col gap-6">
           <Card>

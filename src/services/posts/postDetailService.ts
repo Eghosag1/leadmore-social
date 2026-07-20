@@ -6,7 +6,8 @@ import { notifyPostFailure } from "@/services/notifications/postFailureNotificat
 import { buildRawPhotoRenderProps, buildTemplateRenderProps } from "@/lib/template-render";
 import type { PropertyRow } from "@/types/database";
 import type { TemplateConfig, TemplateRenderProps } from "@/types/domain";
-import type { Platform, PostCanvasMode, PostStatus } from "@/types/enums";
+import type { CanvasFormat, Platform, PostCanvasMode, PostStatus } from "@/types/enums";
+import type { ScenesByFormat } from "@/types/scene";
 
 export interface PostDetailData {
   postId: string;
@@ -17,7 +18,10 @@ export interface PostDetailData {
   status: PostStatus;
   jobs: { platform: Platform; status: PostStatus; error_message: string | null }[];
   componentSource: string | null;
-  templateKey: string | null;
+  /** Non-null when this post's template uses the JSON scene model (Phase C) instead of source. */
+  scenesByFormat: ScenesByFormat | null;
+  /** Which of the template's designed formats this post uses — set alongside a non-null scenesByFormat. */
+  canvasFormat: CanvasFormat | null;
   canvasMode: PostCanvasMode;
   canvasHeight: number | null;
   slideCount: number;
@@ -104,21 +108,24 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     if (refreshed) post.status = refreshed.status;
   }
 
-  const [{ data: property }, { data: agency }, { data: slides }, { data: jobs }] = await Promise.all([
+  const [{ data: property }, { data: agency }, { data: slides }, { data: jobs }, { data: fonts }] = await Promise.all([
     supabase.from("properties").select("*").eq("id", post.property_id).maybeSingle(),
-    supabase.from("agencies").select("name, logo_url, custom_font_url, custom_font_family").eq("id", agencyId).single(),
+    supabase.from("agencies").select("name, logo_url").eq("id", agencyId).single(),
     supabase.from("post_slides").select("*").eq("post_id", postId).order("sort_order"),
     supabase.from("post_jobs").select("platform, status, error_message").eq("post_id", postId),
+    supabase.from("agency_fonts").select("*").eq("agency_id", agencyId),
   ]);
 
   if (!property) return null;
 
-  const { data: images } = await supabase.from("property_images").select("*").eq("property_id", property.id);
   const firstSlide = slides?.[0];
 
   let componentSource: string | null = null;
-  let templateKey: string | null = null;
-  let slideCount = Math.max(slides?.length ?? 1, 1);
+  let scenesByFormat: ScenesByFormat | null = null;
+  // Real slide count for a templated post is however many post_slides rows
+  // it actually has (photo-count-driven, see actions.ts), not the template's
+  // own agency_templates.slide_count — see PLAN_TEMPLATE_EDITOR.md Phase B.
+  const slideCount = Math.max(slides?.length ?? 1, 1);
   let previewData: TemplateRenderProps;
 
   if (post.agency_template_id) {
@@ -127,19 +134,18 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
 
     const slideText = (firstSlide?.text_content ?? {}) as { title?: string; description?: string | null };
     componentSource = template.component_source;
-    templateKey = template.template_key;
-    slideCount = template.slide_count;
+    scenesByFormat = template.scenes_by_format;
     previewData = buildTemplateRenderProps({
       property,
-      images: images ?? [],
+      // This post's own chosen photos, in slide order — not every property
+      // photo, see renderDataService.ts's getSlideRenderData for the same fix.
+      images: (slides ?? []).map((slide) => ({ image_url: slide.image_url, sort_order: slide.sort_order })),
       config: template.config as unknown as TemplateConfig,
       agencyName: agency?.name ?? "",
-      customFontFamily: agency?.custom_font_family,
-      customFontUrl: agency?.custom_font_url,
+      fonts: fonts ?? [],
       overrides: {
         title: slideText.title,
         description: slideText.description ?? undefined,
-        coverImageUrl: firstSlide?.image_url,
       },
     });
   } else {
@@ -162,7 +168,8 @@ export async function getPostDetailData(postId: string, agencyId: string): Promi
     status: post.status,
     jobs: jobs ?? [],
     componentSource,
-    templateKey,
+    scenesByFormat,
+    canvasFormat: post.canvas_format,
     canvasMode: post.canvas_mode,
     canvasHeight: post.canvas_height,
     slideCount,
